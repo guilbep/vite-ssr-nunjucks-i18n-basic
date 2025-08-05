@@ -1,0 +1,31 @@
+{
+  "site": { "name": "GCS" },
+  "nav": {
+    "home": "Accueil",
+    "gcs": "GCS",
+    "data": "Données",
+    "education": "Éducation",
+    "dictionary": "Dictionnaire",
+    "links": "Liens utiles",
+    "about": "À propos",
+    "contact": "Contact"
+  },
+  "home": { "title": "Bienvenue sur GCS" },
+  "gcs": {
+    "title": "GCS • Quoi & Pourquoi",
+    "why": "Pourquoi le GCS ?",
+    "what": "Qu'est-ce que le GCS ?",
+    "world": "Le GCS dans le monde",
+    "ch": "Le GCS en Suisse"
+  },
+  "education": {
+    "title": "Éducation",
+    "carbon": "Équipe carbone",
+    "workshops": "Ateliers",
+    "visits": "Visites"
+  },
+  "dictionary": { "title": "Dictionnaire" },
+  "links": { "title": "Liens utiles" },
+  "about": { "title": "À propos" },
+  "contact": { "title": "Contact" }
+}

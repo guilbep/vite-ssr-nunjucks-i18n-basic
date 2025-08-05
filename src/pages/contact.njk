@@ -1,0 +1,6 @@
+{% include 'layouts/main.njk' %}
+
+{% block content %}
+<h2>{{ catalogs[locale or 'en']['contact.title'] if catalogs else 'Contact' }}</h2>
+<p>Get in touch with the INPLUGS CO2 team.</p>
+{% endblock %}

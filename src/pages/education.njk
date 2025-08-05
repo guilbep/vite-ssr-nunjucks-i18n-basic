@@ -1,0 +1,6 @@
+{% include 'layouts/main.njk' %}
+
+{% block content %}
+<h2>{{ catalogs[locale or 'en']['education.title'] if catalogs else 'Education' }}</h2>
+<p>Educational resources and materials about carbon storage and removal.</p>
+{% endblock %}

@@ -50,6 +50,17 @@ export function multiLocalePlugin(options = {}) {
     return currentTranslator ? currentTranslator(key, params) : key
   })
 
+  // Load routes configuration
+  function loadRoutesConfig() {
+    try {
+      const routesData = JSON.parse(readFileSync('routes.config.json', 'utf8'))
+      return routesData
+    } catch (err) {
+      console.warn('Could not load routes.config.json:', err.message)
+      return { routes: {} }
+    }
+  }
+
   // Load locale data
   function loadLocaleData() {
     const localeData = {}
@@ -63,6 +74,36 @@ export function multiLocalePlugin(options = {}) {
       }
     }
     return localeData
+  }
+
+  // Helper function to get route path for a page key and locale
+  function getRoutePath(pageKey, locale, routesConfig) {
+    const routes = routesConfig.routes || {}
+    const localeRoutes = routes[locale] || []
+    const route = localeRoutes.find(r => r.key === pageKey)
+    return route ? route.path : null
+  }
+
+  // Helper function to get page key from filename
+  function getPageKey(filename) {
+    // Remove extension and locale suffix
+    const base = filename.replace(/\.njk$/, '').replace(/\.[a-z]{2}$/, '')
+    return base
+  }
+
+  // Helper function to get all route paths for a page key across all locales
+  function getAllRoutePaths(pageKey, routesConfig) {
+    const paths = {}
+    const routes = routesConfig.routes || {}
+    
+    for (const locale of locales) {
+      const localeRoutes = routes[locale] || []
+      const route = localeRoutes.find(r => r.key === pageKey)
+      if (route) {
+        paths[locale] = route.path
+      }
+    }
+    return paths
   }
 
   // Create real t() function with fallback and params - now supports nested keys
@@ -172,25 +213,73 @@ export function multiLocalePlugin(options = {}) {
     return prev !== m
   }
 
-  // Rewrite root-relative links to be locale-aware (but preserve /assets/ paths)
-  function rewriteLinks(html, locale) {
+  // Rewrite root-relative links to be locale-aware using routes configuration
+  function rewriteLinksWithRoutes(html, locale, routesConfig) {
     if (linkRewrite === 'off') return html
-    // Replace href="/xxx" unless already locale-prefixed, external/anchor/mailto, OR /assets/
-    return html.replaceAll(
-      /href="\/(?![a-z]{2}\/|#|mailto:|tel:|assets\/)([^"]*)"/g,
-      (_, p) => `href="/${locale}/${p.replace(/^\/+/, '')}"`
-    ).replaceAll(
-      /src="\/(?![a-z]{2}\/|#|mailto:|tel:|assets\/)([^"]*)"/g,
-      (_, p) => `src="/${locale}/${p.replace(/^\/+/, '')}"`
-    )
+    
+    // First, try to match page keys in links and convert them to proper routes
+    return html.replace(/href="([^"]*?)"/g, (match, href) => {
+      // Skip external links, anchors, mailto, tel, and assets
+      if (href.startsWith('http') || href.startsWith('#') || href.startsWith('mailto:') || 
+          href.startsWith('tel:') || href.startsWith('/assets/')) {
+        return match
+      }
+      
+      // If it's already a properly formatted route path, leave it
+      if (href.startsWith('/en/') || href.startsWith('/fr/')) {
+        return match
+      }
+      
+      // Try to parse as page key (e.g., "about", "contact")
+      const pageKey = href.replace(/^\//, '').replace(/\.html$/, '')
+      const routePath = getRoutePath(pageKey, locale, routesConfig)
+      
+      if (routePath) {
+        return `href="${routePath}"`
+      }
+      
+      // Fallback to original behavior for unknown links
+      const cleanHref = href.replace(/^\/+/, '')
+      return `href="/${locale}/${cleanHref}"`
+    }).replace(/src="([^"]*?)"/g, (match, src) => {
+      // Handle src attributes (images, scripts, etc.)
+      if (src.startsWith('http') || src.startsWith('/assets/') || src.startsWith('data:')) {
+        return match
+      }
+      
+      const cleanSrc = src.replace(/^\/+/, '')
+      return `src="/${locale}/${cleanSrc}"`
+    })
   }
 
   // Render one page for a specific locale
-  async function renderOne({ relTemplate, baseRel, locale, availableLocales, localeData }) {
+  async function renderOne({ relTemplate, baseRel, locale, availableLocales, localeData, routesConfig }) {
     const templateName = 'pages/' + relTemplate
-    const pageName = baseRel.replace('.njk', '.html') // stable slug
+    const pageKey = getPageKey(baseRel)
+    
+    // Get the route path for this page and locale
+    const routePath = getRoutePath(pageKey, locale, routesConfig)
+    if (!routePath) {
+      console.warn(`No route found for page key "${pageKey}" in locale "${locale}"`)
+      return
+    }
+    
+    // Convert route path to file path (remove leading slash, ensure .html extension)
+    let filePath = routePath.replace(/^\//, '').replace(/\/$/, '')
+    if (!filePath) filePath = 'index'
+    
+    // For index routes, place them in the locale directory structure
+    if (filePath === 'en' || filePath === 'fr') {
+      filePath = filePath + '/index'
+    }
+    
+    if (!filePath.endsWith('.html')) filePath += '.html'
+    
+    // Get all route paths for this page across locales for navigation
+    const allRoutePaths = getAllRoutePaths(pageKey, routesConfig)
+    
     // Include all configured locales in alternates for navigation
-    const alternates = [...locales] // All locales should be navigable
+    const alternates = [...locales]
     const meta = localesMeta[locale] || {}
     
     // Create translator for this locale
@@ -213,17 +302,31 @@ export function multiLocalePlugin(options = {}) {
         ...Object.fromEntries(
           Object.entries(localeData[locale] || localeData[defaultLocale] || {})
         ),
-        currentPage: `/${pageName}`,
-        page: { slug: pageName.replace('.html', '') },
+        currentPage: routePath,
+        page: { 
+          slug: pageKey,
+          key: pageKey,
+          path: routePath,
+          routes: allRoutePaths  // All localized paths for this page
+        },
         isCurrentLocale: l => l === locale,
-        getLocalizedUrl: (path, targetLocale = locale) => {
-          const cleanPath = path.replace(/^\/([a-z]{2})\//,'')
+        getLocalizedUrl: (pageKeyOrPath, targetLocale = locale) => {
+          // If it's a page key, look up the route
+          const targetRoute = getRoutePath(pageKeyOrPath, targetLocale, routesConfig)
+          if (targetRoute) return targetRoute
+          
+          // Otherwise try to convert existing path
+          const cleanPath = pageKeyOrPath.replace(/^\/([a-z]{2})\//,'')
           return `/${targetLocale}/${cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath}`
+        },
+        // Helper function to get route for a specific page key and locale
+        getRouteUrl: (pageKey, targetLocale = locale) => {
+          return getRoutePath(pageKey, targetLocale, routesConfig) || '#'
         }
       })
       
-      // Rewrite links if enabled
-      html = rewriteLinks(html, locale)
+      // Update link rewriting to be aware of routes
+      html = rewriteLinksWithRoutes(html, locale, routesConfig)
       
       // Minify HTML in production
       if (isProduction) {
@@ -242,24 +345,19 @@ export function multiLocalePlugin(options = {}) {
         })
       }
       
-      // Create output directory
-      const outputPath = `${outputDir}/${locale}`
+      // Create output directory structure based on route path
+      const outputPath = join(outputDir, dirname(filePath))
       if (!existsSync(outputPath)) {
         mkdirSync(outputPath, { recursive: true })
       }
       
       // Write the file
-      const outputFile = `${outputPath}/${pageName}`
-      const outputFileDir = dirname(outputFile)
-      if (!existsSync(outputFileDir)) {
-        mkdirSync(outputFileDir, { recursive: true })
-      }
-      
+      const outputFile = join(outputDir, filePath)
       writeFileSync(outputFile, html)
-      console.log(`  ✓ ${locale}/${pageName}`)
+      console.log(`  ✓ ${routePath} → ${filePath}`)
       
     } catch (err) {
-      console.error(`  ✗ Error rendering ${locale}/${pageName}:`, err.message)
+      console.error(`  ✗ Error rendering ${routePath}:`, err.message)
     } finally {
       // Reset global translator
       currentTranslator = null
@@ -267,20 +365,19 @@ export function multiLocalePlugin(options = {}) {
   }
 
   // Generate localized sitemaps
-  function buildSitemaps() {
+  function buildSitemaps(routesConfig) {
     const urlsets = new Map() // locale => Set(paths)
     for (const locale of locales) urlsets.set(locale, new Set())
     
-    for (const file of glob.sync(`${outputDir}/{${locales.join(',')}}/**/*.html`)) {
-      const m = file.match(new RegExp(`${outputDir}/([a-z]{2})/(.*)\\.html$`))
-      if (!m) continue
-      const [, locale, path] = m
-      // Build proper URL structure
-      let loc = `${siteUrl}/${locale}/`
-      if (path && path !== 'index') {
-        loc += `${path}/`
+    // Use routes configuration to build sitemap URLs
+    const routes = routesConfig.routes || {}
+    for (const locale of locales) {
+      const localeRoutes = routes[locale] || []
+      for (const route of localeRoutes) {
+        let url = `${siteUrl}${route.path}`
+        if (!url.endsWith('/')) url += '/'
+        urlsets.get(locale).add(url)
       }
-      urlsets.get(locale).add(loc)
     }
 
     // per-locale sitemaps
@@ -305,8 +402,8 @@ ${items}
     console.log(`  ✓ sitemap-index.xml`)
   }
 
-  // Generate localized 404 pages
-  async function write404s() {
+  // Generate localized 404 pages using routes
+  async function write404s(routesConfig) {
     for (const locale of locales) {
       const meta = localesMeta[locale] || {}
       
@@ -336,9 +433,15 @@ ${items}
             currentPage: '/404.html',
             page: { slug: '404' },
             isCurrentLocale: l => l === locale,
-            getLocalizedUrl: (path, targetLocale = locale) => {
-              const cleanPath = path.replace(/^\/([a-z]{2})\//,'')
+            getLocalizedUrl: (pageKeyOrPath, targetLocale = locale) => {
+              const targetRoute = getRoutePath(pageKeyOrPath, targetLocale, routesConfig)
+              if (targetRoute) return targetRoute
+              
+              const cleanPath = pageKeyOrPath.replace(/^\/([a-z]{2})\//,'')
               return `/${targetLocale}/${cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath}`
+            },
+            getRouteUrl: (pageKey, targetLocale = locale) => {
+              return getRoutePath(pageKey, targetLocale, routesConfig) || '#'
             }
           })
         } catch (err) {
@@ -351,6 +454,7 @@ ${items}
       
       // Fallback to basic 404 page
       if (!html) {
+        const homeRoute = getRoutePath('index', locale, routesConfig) || `/${locale}/`
         html = `<!DOCTYPE html>
 <html lang="${locale}" dir="${meta.rtl ? 'rtl' : 'ltr'}">
 <head>
@@ -360,7 +464,7 @@ ${items}
 <body>
   <h1>404 - Page Not Found</h1>
   <p>The page you are looking for could not be found.</p>
-  <a href="/${locale}/">Go Home</a>
+  <a href="${homeRoute}">Go Home</a>
 </body>
 </html>`
       }
@@ -374,15 +478,20 @@ ${items}
         })
       }
 
-      const out = `${outputDir}/${locale}/404.html`
+      // Write 404 to the locale-specific directory structure from routes
+      const localeRoutes = routesConfig.routes?.[locale] || []
+      const indexRoute = localeRoutes.find(r => r.key === 'index')
+      const localeDir = indexRoute ? dirname(indexRoute.path.replace(/^\//, '')) : locale
+      
+      const out = join(outputDir, localeDir, '404.html')
       if (!existsSync(dirname(out))) mkdirSync(dirname(out), { recursive: true })
       writeFileSync(out, html)
-      console.log(`  ✓ ${locale}/404.html`)
+      console.log(`  ✓ ${localeDir}/404.html`)
     }
   }
 
   // Rebuild specific base page for incremental builds
-  async function rebuildBase(base, localeData) {
+  async function rebuildBase(base, localeData, routesConfig) {
     const byBase = new Map()
     const allFiles = glob.sync(`${pagesDir}/**/*.njk`)
     
@@ -408,7 +517,8 @@ ${items}
           baseRel: base, 
           locale, 
           availableLocales: Object.keys(entry.variants), 
-          localeData 
+          localeData,
+          routesConfig
         })
       }
     }
@@ -417,6 +527,7 @@ ${items}
   // Generate all pages for all locales
   async function generatePages() {
     const localeData = loadLocaleData()
+    const routesConfig = loadRoutesConfig()
     
     console.log(`🌍 Generating pages for locales: ${locales.join(', ')}`)
     
@@ -444,7 +555,8 @@ ${items}
           baseRel, 
           locale, 
           availableLocales: Object.keys(entry.variants), 
-          localeData 
+          localeData,
+          routesConfig
         })
       }
     }
@@ -465,12 +577,18 @@ ${items}
     let lang = forced || getCookie() || (navigator.language||'').toLowerCase().slice(0,2);
     if (!supported.includes(lang)) lang = '${defaultLocale}';
     document.cookie = \`lang=\${lang}; path=/; max-age=\${60*60*24*365}\`;
-    location.replace('/' + lang + '/');
+    
+    // Redirect to the home page route for the selected language
+    const routes = ${JSON.stringify(routesConfig.routes || {})};
+    const localeRoutes = routes[lang] || [];
+    const homeRoute = localeRoutes.find(r => r.key === 'index');
+    const homePath = homeRoute ? homeRoute.path : '/' + lang + '/';
+    location.replace(homePath);
   </script>
 </head>
 <body>
   <noscript>
-    <p><a href="/${defaultLocale}/">Continue</a></p>
+    <p><a href="${getRoutePath('index', defaultLocale, routesConfig) || `/${defaultLocale}/`}">Continue</a></p>
   </noscript>
 </body>
 </html>`
@@ -497,12 +615,12 @@ ${items}
     
     // Generate sitemaps if enabled
     if (emitSitemaps) {
-      buildSitemaps()
+      buildSitemaps(routesConfig)
     }
     
     // Generate 404 pages if enabled
     if (emit404s) {
-      await write404s()
+      await write404s(routesConfig)
     }
   }
 
@@ -525,12 +643,13 @@ ${items}
       
       console.log(`📝 File changed: ${path}`)
       const localeData = loadLocaleData()
+      const routesConfig = loadRoutesConfig()
       
       // If a page changed: rebuild that base page for all locales
       if (path.startsWith(pagesDir)) {
         const rel = path.replace(`${pagesDir}/`, '')
         const base = rel.replace(LOCALE_RE, '.njk')
-        await rebuildBase(base, localeData)
+        await rebuildBase(base, localeData, routesConfig)
       } else {
         // layout/partials/data: rebuild all
         await generatePages()
@@ -611,7 +730,36 @@ ${items}
           return
         }
         
-        // If requesting a locale-specific page, serve it
+        // Load routes configuration for URL matching
+        const routesConfig = loadRoutesConfig()
+        const routes = routesConfig.routes || {}
+        
+        // Try to match the URL to a route in any locale
+        for (const locale of locales) {
+          const localeRoutes = routes[locale] || []
+          for (const route of localeRoutes) {
+            // Check if URL matches this route (with or without trailing slash)
+            const routePath = route.path.replace(/\/$/, '')
+            const urlPath = url.replace(/\/$/, '')
+            
+            if (routePath === urlPath || (routePath === '' && urlPath === `/${locale}`)) {
+              // Convert route path to file path
+              let filePath = route.path.replace(/^\//, '').replace(/\/$/, '')
+              if (!filePath) filePath = 'index'
+              if (!filePath.endsWith('.html')) filePath += '.html'
+              
+              const fullPath = join(outputDir, filePath)
+              if (existsSync(fullPath)) {
+                const html = readFileSync(fullPath, 'utf8')
+                res.setHeader('Content-Type', 'text/html')
+                res.end(html)
+                return
+              }
+            }
+          }
+        }
+        
+        // Legacy fallback: If requesting a locale-specific page with old structure
         const localeMatch = url.match(/^\/([a-z]{2})\/(.*)/)
         if (localeMatch) {
           const [, locale, path] = localeMatch

@@ -1,0 +1,7 @@
+{% extends "main.njk" %}
+
+{% block content %}
+<h2>{{ catalogs[locale or 'en']['about.title'] if catalogs else 'About' }}</h2>
+<p>Learn more about the INPLUGS CO2 project and our mission in carbon storage and removal research.</p>
+<p>This platform provides comprehensive information about geological carbon storage (GCS) technologies and their applications.</p>
+{% endblock %}

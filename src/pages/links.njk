@@ -1,0 +1,6 @@
+{% include 'layouts/main.njk' %}
+
+{% block content %}
+<h2>{{ catalogs[locale or 'en']['links.title'] if catalogs else 'Useful Links' }}</h2>
+<p>Useful links and resources related to carbon storage and removal.</p>
+{% endblock %}

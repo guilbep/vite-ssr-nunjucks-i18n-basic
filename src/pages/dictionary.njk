@@ -1,0 +1,6 @@
+{% include 'layouts/main.njk' %}
+
+{% block content %}
+<h2>{{ catalogs[locale or 'en']['dictionary.title'] if catalogs else 'Dictionary' }}</h2>
+<p>Terminology and definitions related to carbon storage and removal.</p>
+{% endblock %}
