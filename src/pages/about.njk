@@ -1,0 +1,15 @@
+{% extends "main.njk" %}
+
+{% block content %}
+<h1>{{ t.about.title }}</h1>
+<p>{{ t.about.description }}</p>
+
+<nav>
+  {% for loc in locales %}
+    <a href="{{ getLocalizedUrl('/about.html', loc) }}" 
+       {% if locale === loc %}class="active"{% endif %}>
+      {{ loc | upper }}
+    </a>
+  {% endfor %}
+</nav>
+{% endblock %}

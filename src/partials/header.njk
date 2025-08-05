@@ -1,0 +1,15 @@
+<header>
+  <nav>
+    <h1>{{ t.siteName or 'My Website' }}</h1>
+    <ul>
+      {% for loc in locales %}
+        <li>
+          <a href="{{ getLocalizedUrl(currentPage, loc) }}" 
+             {% if locale === loc %}class="active"{% endif %}>
+            {{ loc | upper }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
+</header>

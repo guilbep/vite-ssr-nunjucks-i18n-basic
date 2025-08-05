@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ t.title or 'My Site' }}</title>
+</head>
+<body>
+  {% include "header.njk" %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  {% include "footer.njk" %}
+</body>
+</html>

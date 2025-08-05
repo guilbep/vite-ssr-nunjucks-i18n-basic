@@ -1,0 +1,10 @@
+{% extends "main.njk" %}
+
+{% block content %}
+<h1>{{ t.title }}</h1>
+<p>Welcome to our website!</p>
+
+<nav>
+  <a href="/{{ locale }}/about.html">{{ t.about.title or 'About' }}</a>
+</nav>
+{% endblock %}

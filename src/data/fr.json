@@ -1,0 +1,12 @@
+{
+  "title": "Mon site Web",
+  "siteName": "Mon site Web",
+  "locale": "fr",
+  "about": {
+    "title": "À propos de nous",
+    "description": "Nous sommes géniaux !"
+  },
+  "footer": {
+    "rights": "Tous droits réservés."
+  }
+}
