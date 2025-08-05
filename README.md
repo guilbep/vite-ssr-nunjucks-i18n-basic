@@ -214,6 +214,26 @@ window.location.href = "/" + locale + "/";
 | `npm run build` | Build for production with minification |
 | `npm run preview` | Preview production build locally |
 | `npm run serve` | Alias for preview |
+| `npm run lighthouse` | Run full Lighthouse audit on all pages |
+| `npm run lighthouse:quick` | Quick Lighthouse test on single page |
+| `npm test` | Run build test to verify everything works |
+
+## 🔍 Performance Testing
+
+This project includes comprehensive Lighthouse testing for performance, accessibility, SEO, and best practices:
+
+```bash
+# Run full audit on all pages
+npm run lighthouse
+
+# Quick test on single page
+npm run lighthouse:quick
+
+# Manual test any page
+./lighthouse-test.sh /en/about.html
+```
+
+See [LIGHTHOUSE.md](LIGHTHOUSE.md) for detailed testing guide.
 
 ## 🤝 Contributing
 

@@ -33,7 +33,12 @@
     "preview": "vite preview",
     "serve": "vite preview --outDir dist",
     "format": "prettier -w .",
-    "lint:commit": "commitlint --edit"
+    "lint:commit": "commitlint --edit",
+    "lighthouse": "npm run build && lhci autorun",
+    "lighthouse:collect": "npm run build && lhci collect",
+    "lighthouse:upload": "lhci upload",
+    "lighthouse:quick": "./lighthouse-test.sh",
+    "perf": "npm run lighthouse"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -41,7 +46,11 @@
     "nunjucks": "^3.2.4"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "html-minifier-terser": "^7.2.0",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "concurrently": "^9.2.0",
+    "lighthouse": "^12.8.1",
+    "wait-on": "^8.0.4"
   }
 }
