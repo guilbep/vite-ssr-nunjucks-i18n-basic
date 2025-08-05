@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ t("title") or title or 'INPLUGS CO2' }}</title>
+
+
+    {% include "meta.njk" %}
+    
     {% if isProduction and cssHash %}
     <link rel="stylesheet" href="/assets/styles/main.{{ cssHash }}.css" />
     <link rel="stylesheet" href="/assets/styles/tokens.{{ cssHash }}.css" />

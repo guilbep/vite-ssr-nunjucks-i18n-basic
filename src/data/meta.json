@@ -1,0 +1,18 @@
+{
+    "en": {
+        "title": "Guilbert's SSR project",
+        "description": "Brief description of the project",
+        "url": "https://guilberts-ssr-project.app",
+        "lang": "en",
+        "locale": "en_us",
+        "author": "Guilbert Pierre"
+    },
+    "fr": {
+        "title": "Guilbert's SSR project",
+        "description": "Brève description du projet",
+        "url": "https://guilberts-ssr-project.app",
+        "lang": "fr",
+        "locale": "fr_fr",
+        "author": "Guilbert Pierre"
+    }
+}

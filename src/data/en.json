@@ -1,21 +1,31 @@
 {
-  "title": "My Website",
-  "siteName": "My Website",
-  "locale": "en",
-  "about": {
-    "title": "About Us", 
-    "description": "We are awesome!"
-  },
-  "footer": {
-    "rights": "All rights reserved."
-  },
-  "navigation": {
+  "site": { "name": "GCS" },
+  "nav": {
     "home": "Home",
-    "about": "About"
+    "gcs": "GCS",
+    "data": "Data",
+    "education": "Education",
+    "dictionary": "Dictionary",
+    "links": "Useful links",
+    "about": "About",
+    "contact": "Contact"
   },
-  "homepage": {
-    "title": "Welcome",
-    "subtitle": "A great site",
-    "greeting": "Hello {{name}}, welcome to our site!"
-  }
+  "home": { "title": "Welcome to GCS" },
+  "gcs": {
+    "title": "GCS • What & Why",
+    "why": "Why is GCS?",
+    "what": "What is GCS?",
+    "world": "GCS in the world",
+    "ch": "GCS in Switzerland"
+  },
+  "education": {
+    "title": "Education",
+    "carbon": "Carbon team",
+    "workshops": "Workshops",
+    "visits": "Visits"
+  },
+  "dictionary": { "title": "Dictionary" },
+  "links": { "title": "Useful links" },
+  "about": { "title": "About" },
+  "contact": { "title": "Contact" }
 }

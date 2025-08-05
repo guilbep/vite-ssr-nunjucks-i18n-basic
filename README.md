@@ -427,6 +427,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Vite](https://vitejs.dev/) - Next generation frontend tooling
 - [Nunjucks](https://mozilla.github.io/nunjucks/) - Rich templating language
 - [html-minifier-terser](https://github.com/terser/html-minifier-terser) - HTML minification
+- [Eleventy Plus Vite](https://github.com/matthiasott/eleventy-plus-vite) - Inspiration for SSG + Vite integration
 
 ## 📚 Related Projects
 

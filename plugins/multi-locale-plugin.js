@@ -1,5 +1,5 @@
 import { resolve, join, dirname, basename, extname } from 'path'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, copyFileSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, copyFileSync, readdirSync } from 'fs'
 import { glob } from 'glob'
 import nunjucks from 'nunjucks'
 import chokidar from 'chokidar'
@@ -20,8 +20,26 @@ export function multiLocalePlugin(options = {}) {
     localesMeta = {},
     emitSitemaps = true,
     emit404s = true,
-    linkRewrite = 'safety-net'
+    linkRewrite = 'safety-net',
+    copyPublic = true  // Option to disable public directory copying
   } = options
+
+  // Validate required directories exist
+  const requiredDirs = [srcDir, pagesDir, layoutsDir, partialsDir, dataDir]
+  for (const dir of requiredDirs) {
+    if (!existsSync(dir)) {
+      throw new Error(`Required directory "${dir}" does not exist. Please create it or adjust your plugin configuration.`)
+    }
+  }
+
+  // Validate locales configuration
+  if (!Array.isArray(locales) || locales.length === 0) {
+    throw new Error('locales must be a non-empty array')
+  }
+  
+  if (!locales.includes(defaultLocale)) {
+    throw new Error(`defaultLocale "${defaultLocale}" must be included in locales array`)
+  }
 
   let isServing = false
   let server = null
@@ -43,6 +61,33 @@ export function multiLocalePlugin(options = {}) {
   // Add Nunjucks globals and filters
   env.addFilter('locale_url', (p, l) => `/${l}${p.startsWith('/') ? '' : '/'}${p}`)
   env.addFilter('eq', (a, b) => a === b)
+  
+  // Add Eleventy-like filters for compatibility
+  env.addFilter('url', (p) => {
+    // Simple URL filter - handles asset paths and regular paths
+    if (!p) return '/'
+    
+    // If it's already an absolute URL or starts with /, return as-is
+    if (p.startsWith('http') || p.startsWith('/')) return p
+    
+    // For relative paths, prepend with /
+    return '/' + p
+  })
+  
+  env.addFilter('absoluteUrl', (path, baseUrl) => {
+    // Create absolute URL by combining path with base URL
+    if (!path) return baseUrl || ''
+    if (!baseUrl) return path
+    
+    // If path is already absolute, return as-is
+    if (path.startsWith('http')) return path
+    
+    // Ensure baseUrl doesn't end with slash and path starts with slash
+    const cleanBase = baseUrl.replace(/\/$/, '')
+    const cleanPath = path.startsWith('/') ? path : '/' + path
+    
+    return cleanBase + cleanPath
+  })
   
   // Global translator - will be set per render
   let currentTranslator = null
@@ -74,6 +119,17 @@ export function multiLocalePlugin(options = {}) {
       }
     }
     return localeData
+  }
+
+  // Load meta data
+  function loadMetaData() {
+    try {
+      const metaData = JSON.parse(readFileSync(`${dataDir}/meta.json`, 'utf8'))
+      return metaData
+    } catch (err) {
+      console.warn('Could not load meta.json:', err.message)
+      return {}
+    }
   }
 
   // Helper function to get route path for a page key and locale
@@ -133,8 +189,56 @@ export function multiLocalePlugin(options = {}) {
     return createHash('md5').update(content).digest('hex').slice(0, 8)
   }
 
+  // Copy public directory contents to dist, excluding files that will be processed separately
+  function copyPublicAssets() {
+    const publicDir = 'public'
+    
+    if (!existsSync(publicDir)) {
+      console.warn('Public directory not found, skipping public assets copy')
+      return
+    }
+
+    // Files/paths to exclude from public copy (will be processed separately)
+    const excludePatterns = [
+      'js/nav-active-lang.js', // This gets processed with hash
+    ]
+
+    function shouldExclude(relativePath) {
+      return excludePatterns.some(pattern => relativePath.includes(pattern))
+    }
+
+    function copyRecursively(sourceDir, targetDir, basePath = '') {
+      if (!existsSync(targetDir)) {
+        mkdirSync(targetDir, { recursive: true })
+      }
+
+      const items = readdirSync(sourceDir, { withFileTypes: true })
+      
+      for (const item of items) {
+        const sourcePath = join(sourceDir, item.name)
+        const targetPath = join(targetDir, item.name)
+        const relativePath = join(basePath, item.name).replace(/\\/g, '/') // Normalize for Windows
+        
+        if (item.isDirectory()) {
+          copyRecursively(sourcePath, targetPath, relativePath)
+        } else if (item.isFile() && !shouldExclude(relativePath)) {
+          copyFileSync(sourcePath, targetPath)
+          console.log(`  ✓ ${relativePath} → ${relativePath}`)
+        }
+      }
+    }
+
+    copyRecursively(publicDir, outputDir)
+  }
+
   // Copy assets to /assets/ directory (dev: no hash, prod: with hash)
   function processAssets() {
+    if (copyPublic) {
+      console.log('📁 Copying public directory...')
+      copyPublicAssets()
+    }
+    
+    console.log('🎨 Processing styled assets...')
     const assetsDir = join(outputDir, 'assets')
     if (!existsSync(assetsDir)) mkdirSync(assetsDir, { recursive: true })
     
@@ -253,7 +357,7 @@ export function multiLocalePlugin(options = {}) {
   }
 
   // Render one page for a specific locale
-  async function renderOne({ relTemplate, baseRel, locale, availableLocales, localeData, routesConfig }) {
+  async function renderOne({ relTemplate, baseRel, locale, availableLocales, localeData, routesConfig, metaData }) {
     const templateName = 'pages/' + relTemplate
     const pageKey = getPageKey(baseRel)
     
@@ -310,12 +414,18 @@ export function multiLocalePlugin(options = {}) {
           Object.entries(localeData[locale] || localeData[defaultLocale] || {})
         ),
         navItems,               // Navigation items from routes config
+        meta: metaData,         // Meta data from meta.json
         currentPage: routePath,
         page: { 
           slug: pageKey,
           key: pageKey,
           path: routePath,
+          url: routePath,        // Add url property for templates that expect it
           routes: allRoutePaths  // All localized paths for this page
+        },
+        // Add eleventy-like object for compatibility
+        eleventy: {
+          generator: 'Multi-locale Static Site Generator v1.0'
         },
         isCurrentLocale: l => l === locale,
         getLocalizedUrl: (pageKeyOrPath, targetLocale = locale) => {
@@ -499,7 +609,7 @@ ${items}
   }
 
   // Rebuild specific base page for incremental builds
-  async function rebuildBase(base, localeData, routesConfig) {
+  async function rebuildBase(base, localeData, routesConfig, metaData) {
     const byBase = new Map()
     const allFiles = glob.sync(`${pagesDir}/**/*.njk`)
     
@@ -526,7 +636,8 @@ ${items}
           locale, 
           availableLocales: Object.keys(entry.variants), 
           localeData,
-          routesConfig
+          routesConfig,
+          metaData
         })
       }
     }
@@ -536,6 +647,7 @@ ${items}
   async function generatePages() {
     const localeData = loadLocaleData()
     const routesConfig = loadRoutesConfig()
+    const metaData = loadMetaData()
     
     console.log(`🌍 Generating pages for locales: ${locales.join(', ')}`)
     
@@ -564,7 +676,8 @@ ${items}
           locale, 
           availableLocales: Object.keys(entry.variants), 
           localeData,
-          routesConfig
+          routesConfig,
+          metaData
         })
       }
     }
@@ -652,12 +765,13 @@ ${items}
       console.log(`📝 File changed: ${path}`)
       const localeData = loadLocaleData()
       const routesConfig = loadRoutesConfig()
+      const metaData = loadMetaData()
       
       // If a page changed: rebuild that base page for all locales
       if (path.startsWith(pagesDir)) {
         const rel = path.replace(`${pagesDir}/`, '')
         const base = rel.replace(LOCALE_RE, '.njk')
-        await rebuildBase(base, localeData, routesConfig)
+        await rebuildBase(base, localeData, routesConfig, metaData)
       } else {
         // layout/partials/data: rebuild all
         await generatePages()
