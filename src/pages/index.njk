@@ -1,7 +1,10 @@
 {% extends "main.njk" %}
 
 {% block content %}
-<h2>{{ catalogs[locale or 'en']['home.title'] if catalogs else 'Welcome to INPLUGS CO2' }}</h2>
-<p>{{ catalogs[locale or 'en']['home.description'] if catalogs else 'Carbon storage and removal platform for research and education.' }}</p>
-<p>Explore our resources on geological carbon storage, data, and educational materials.</p>
+
+<h1>{{ t("homepage.title") }}</h1>
+<h2>{{ t("homepage.subtitle") }}</h2>
+<p>{{ t("homepage.greeting", { name: "User" }) }}</p>
+
+
 {% endblock %}

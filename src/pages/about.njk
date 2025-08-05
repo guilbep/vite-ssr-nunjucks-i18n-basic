@@ -1,8 +1,6 @@
 {% extends "main.njk" %}
 
 {% block content %}
-<h2>{{ catalogs[locale or 'en']['about.title'] if catalogs else 'About' }}</h2>
-{% block content %}
 <h1>{{ t("about.title") }}</h1>
 <p>{{ t("about.description") }}</p>
 
