@@ -8,5 +8,14 @@
   },
   "footer": {
     "rights": "All rights reserved."
+  },
+  "navigation": {
+    "home": "Home",
+    "about": "About"
+  },
+  "homepage": {
+    "title": "Welcome",
+    "subtitle": "A great site",
+    "greeting": "Hello {{name}}, welcome to our site!"
   }
 }

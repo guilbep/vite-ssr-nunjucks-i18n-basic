@@ -12,7 +12,15 @@ export default defineConfig({
       dataDir: 'src/data',
       outputDir: 'dist',
       defaultLocale: 'en',
-      locales: ['en', 'fr']
+      locales: ['en', 'fr'],
+      siteUrl: 'https://example.com',
+      localesMeta: {
+        en: { name: 'English', rtl: false },
+        fr: { name: 'Français', rtl: false }
+      },
+      emitSitemaps: true,
+      emit404s: true,
+      linkRewrite: 'safety-net'
     }),
     // Virtual entry plugin to provide the required input
     {

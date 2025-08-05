@@ -8,5 +8,14 @@
   },
   "footer": {
     "rights": "Tous droits réservés."
+  },
+  "navigation": {
+    "home": "Accueil",
+    "about": "À propos"
+  },
+  "homepage": {
+    "title": "Bienvenue",
+    "subtitle": "Un super site",
+    "greeting": "Bonjour {{name}}, bienvenue sur notre site !"
   }
 }

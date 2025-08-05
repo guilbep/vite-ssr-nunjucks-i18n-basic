@@ -1,6 +1,7 @@
 {
   "name": "vite-ssr-nunjucks-i18n-basic",
   "version": "1.0.0",
+  "type": "module",
   "description": "A modern, fast, and SEO-friendly multi-locale static site generator powered by Vite and Nunjucks",
   "main": "vite.config.js",
   "keywords": [

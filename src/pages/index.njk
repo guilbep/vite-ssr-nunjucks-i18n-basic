@@ -1,10 +1,11 @@
 {% extends "main.njk" %}
 
 {% block content %}
-<h1>{{ t.title }}</h1>
-<p>Welcome to our website!</p>
+<h1>{{ t("homepage.title") }}</h1>
+<h2>{{ t("homepage.subtitle") }}</h2>
+<p>{{ t("homepage.greeting", { name: "User" }) }}</p>
 
 <nav>
-  <a href="/{{ locale }}/about.html">{{ t.about.title or 'About' }}</a>
+  <a href="/{{ locale }}/about.html">{{ t("navigation.about") or 'About' }}</a>
 </nav>
 {% endblock %}

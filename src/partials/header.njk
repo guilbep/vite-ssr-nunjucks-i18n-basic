@@ -1,11 +1,11 @@
 <header>
   <nav>
-    <h1>{{ t.siteName or 'My Website' }}</h1>
+    <h1>{{ t("siteName") or 'My Website' }}</h1>
     <ul>
-      {% for loc in locales %}
+      {% for loc in alternates %}
         <li>
           <a href="{{ getLocalizedUrl(currentPage, loc) }}" 
-             {% if locale === loc %}class="active"{% endif %}>
+             {% if locale == loc %}class="active"{% endif %}>
             {{ loc | upper }}
           </a>
         </li>

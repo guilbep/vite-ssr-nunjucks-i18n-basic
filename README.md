@@ -16,11 +16,16 @@
 - 🌍 **Multi-locale support** - Generate static sites in multiple languages
 - ⚡ **Lightning fast** - Powered by Vite for instant HMR and fast builds
 - 🎨 **Template inheritance** - Clean Nunjucks templating system
-- 📱 **SEO optimized** - Static HTML generation for perfect SEO
-- 🔥 **Hot reloading** - Real-time updates during development
+- 📱 **SEO optimized** - Static HTML generation with hreflang tags and localized sitemaps
+- 🔥 **Hot reloading** - Real-time updates during development with incremental rebuilds
 - 🗜️ **Production ready** - HTML minification and optimization
-- 🧭 **Smart routing** - Automatic browser language detection
+- 🧭 **Smart routing** - Automatic browser language detection with cookie persistence
 - 🎯 **Zero config** - Works out of the box with sensible defaults
+- 📄 **Co-located variants** - Support for page-specific locale variants (`about.fr.njk`)
+- 🌐 **Fallback system** - Automatic fallback to default locale for missing translations
+- 🔗 **Smart link rewriting** - Automatic locale-aware link conversion
+- 📊 **Advanced SEO** - Localized sitemaps, 404 pages, and canonical URLs
+- 🍪 **User preference** - Cookie-based language preference with query override
 
 ## 🚀 Quick Start
 
@@ -81,8 +86,8 @@ touch src/pages/contact.njk
 {% extends "main.njk" %}
 
 {% block content %}
-<h1>{{ t.contact.title }}</h1>
-<p>{{ t.contact.description }}</p>
+<h1>{{ t("contact.title") }}</h1>
+<p>{{ t("contact.description") }}</p>
 {% endblock %}
 ```
 
@@ -101,6 +106,26 @@ touch src/pages/contact.njk
    - `/en/contact.html`
    - `/fr/contact.html`
 
+### Co-located Page Variants
+
+Create locale-specific versions of pages when you need different content:
+
+```bash
+# Default page (fallback for all locales)
+src/pages/about.njk
+
+# French-specific version
+src/pages/about.fr.njk
+
+# German-specific version  
+src/pages/about.de.njk
+```
+
+The plugin will:
+- Use the locale-specific version if available
+- Fall back to the default version for missing locales
+- Include all available variants in `alternates` for hreflang tags
+
 ### Adding New Locales
 
 1. Create a new translation file:
@@ -111,17 +136,23 @@ touch src/data/de.json
 2. Add the locale to your Vite config:
 ```javascript
 // vite.config.js
-locales: ['en', 'fr', 'de']
+locales: ['en', 'fr', 'de'],
+localesMeta: {
+  en: { name: 'English', rtl: false },
+  fr: { name: 'Français', rtl: false },
+  de: { name: 'Deutsch', rtl: false }
+}
 ```
 
 3. Your site will now generate German pages automatically!
 
 ### Template Features
 
-#### Translation Variables
+#### Translation Function
 ```html
-{{ t.homepage.title }}          <!-- Access nested translations -->
-{{ t.navigation.home }}         <!-- Navigation items -->
+{{ t("homepage.title") }}               <!-- Function call with nested keys -->
+{{ t("homepage.greeting", { name: "John" }) }}  <!-- With parameters -->
+{{ t("missing.key") }}                  <!-- Fallback to key if not found -->
 ```
 
 #### Locale Helpers
@@ -130,6 +161,8 @@ locales: ['en', 'fr', 'de']
 {{ currentLocale }}             <!-- Same as locale -->
 {{ defaultLocale }}             <!-- Default locale -->
 {{ locales }}                   <!-- Array of all locales -->
+{{ alternates }}                <!-- Array of available locales for this page -->
+{{ rtl }}                       <!-- Boolean: is right-to-left language -->
 ```
 
 #### Helper Functions
@@ -139,6 +172,26 @@ locales: ['en', 'fr', 'de']
 
 <!-- Generate localized URLs -->
 <a href="{{ getLocalizedUrl('/about.html', 'fr') }}">French About</a>
+
+<!-- Nunjucks conditionals (not JavaScript syntax) -->
+{% if locale == 'fr' %}Bonjour{% else %}Hello{% endif %}
+```
+
+#### SEO and Navigation
+```html
+<!-- In your layout template -->
+{% for l in alternates %}
+<link rel="alternate" hreflang="{{ l }}" href="{{ getLocalizedUrl(currentPage, l) }}">
+{% endfor %}
+<link rel="alternate" hreflang="x-default" href="{{ getLocalizedUrl(currentPage, defaultLocale) }}">
+
+<!-- Language switcher -->
+{% for loc in alternates %}
+<a href="{{ getLocalizedUrl(currentPage, loc) }}" 
+   {% if locale == loc %}class="active"{% endif %}>
+  {{ loc | upper }}
+</a>
+{% endfor %}
 ```
 
 ## ⚙️ Configuration
@@ -155,7 +208,16 @@ createMultiLocalePlugin({
   dataDir: 'src/data',        // Translation files
   outputDir: 'dist',          // Output directory
   defaultLocale: 'en',        // Default language
-  locales: ['en', 'fr']       // Supported languages
+  locales: ['en', 'fr'],      // Supported languages
+  siteUrl: 'https://example.com', // For sitemaps and canonicals
+  localesMeta: {              // Locale metadata
+    en: { name: 'English', rtl: false },
+    fr: { name: 'Français', rtl: false },
+    ar: { name: 'العربية', rtl: true }
+  },
+  emitSitemaps: true,         // Generate localized sitemaps
+  emit404s: true,             // Generate localized 404 pages
+  linkRewrite: 'safety-net'   // Auto-rewrite root-relative links
 })
 ```
 
@@ -172,39 +234,85 @@ In production builds, HTML is automatically minified with:
 
 ### Development (`npm run dev`)
 - Hot reloading with file watching
+- Incremental rebuilds for changed files
 - Unminified HTML for debugging
 - Instant updates on file changes
 
 ### Production (`npm run build`)
 ```
 dist/
-├── index.html          # Root redirect (minified)
+├── index.html          # Root redirect (minified, with cookie support)
 ├── en/
 │   ├── index.html      # English home (minified)
-│   └── about.html      # English about (minified)
-└── fr/
-    ├── index.html      # French home (minified)
-    └── about.html      # French about (minified)
+│   ├── about.html      # English about (minified)
+│   └── 404.html        # English 404 page
+├── fr/
+│   ├── index.html      # French home (minified)
+│   ├── about.html      # French about (minified)
+│   └── 404.html        # French 404 page
+├── sitemap-en.xml      # English sitemap
+├── sitemap-fr.xml      # French sitemap
+└── sitemap-index.xml   # Sitemap index
 ```
 
 ## 🌐 Browser Language Detection
 
-The root `index.html` automatically redirects users to their preferred language:
+The root `index.html` automatically redirects users to their preferred language with enhanced features:
 
 ```javascript
-// Automatic language detection
-const userLang = navigator.language.substring(0, 2);
-const supportedLocales = ["en", "fr"];
-const locale = supportedLocales.includes(userLang) ? userLang : "en";
-window.location.href = "/" + locale + "/";
+// Enhanced language detection with cookie persistence
+const qs = new URLSearchParams(location.search);
+const forced = qs.get('lang');           // Query parameter override (?lang=fr)
+const supported = ["en", "fr"];
+const COOKIE = 'lang=';
+const getCookie = () => document.cookie.split('; ').find(c => c.startsWith(COOKIE))?.slice(COOKIE.length);
+
+let lang = forced || getCookie() || (navigator.language||'').toLowerCase().slice(0,2);
+if (!supported.includes(lang)) lang = "en";
+document.cookie = `lang=${lang}; path=/; max-age=${60*60*24*365}`;  // Remember for 1 year
+location.replace('/' + lang + '/');
 ```
+
+### Language Preference Features
+- **Query Override**: `?lang=fr` forces French
+- **Cookie Persistence**: Remembers user's choice for 1 year
+- **Browser Detection**: Falls back to browser language
+- **Graceful Fallback**: Uses default locale if unsupported
+
+## 🚀 Advanced Features
+
+### Translation System
+The plugin provides a powerful translation system with:
+- **Nested key support**: `t("homepage.greeting")`
+- **Parameter interpolation**: `t("welcome", { name: "John" })`
+- **Automatic fallback**: Missing translations fall back to default locale
+- **Global Nunjucks function**: Available in all templates
+
+### SEO Optimization
+- **Localized sitemaps**: Separate sitemaps per locale + sitemap index
+- **hreflang tags**: Automatic alternate language declarations
+- **Canonical URLs**: Proper SEO structure for each locale
+- **404 pages**: Localized error pages with template support
+
+### Development Experience
+- **Incremental rebuilds**: Only rebuild changed pages in development
+- **Hot reloading**: Instant updates with Vite HMR
+- **File watching**: Automatic detection of template, layout, and data changes
+- **Error handling**: Clear error messages for template issues
+
+### Link Management
+- **Smart rewriting**: Automatic conversion of root-relative links (`/about/` → `/fr/about/`)
+- **Helper functions**: `getLocalizedUrl()` for manual link generation
+- **Safety net**: Optional automatic link rewriting for legacy content
 
 ## 📊 Performance
 
-- ⚡ **Build time**: ~70ms for 4 pages
-- 🗜️ **HTML compression**: ~40-60% size reduction
-- 🚀 **HMR**: Instant hot reloading
-- 📦 **Bundle size**: Zero JavaScript in final output
+- ⚡ **Build time**: ~70ms for 4 pages + sitemaps + 404s
+- 🗜️ **HTML compression**: ~40-60% size reduction in production
+- 🚀 **HMR**: Instant hot reloading with incremental rebuilds
+- 📦 **Bundle size**: Zero JavaScript in final output (pure static HTML)
+- 🔄 **Smart caching**: File modification time tracking for efficient rebuilds
+- 🎯 **Selective updates**: Only rebuild affected pages on template changes
 
 ## 🛠️ Scripts
 
@@ -234,6 +342,73 @@ npm run lighthouse:quick
 ```
 
 See [LIGHTHOUSE.md](LIGHTHOUSE.md) for detailed testing guide.
+
+## 📚 Examples
+
+### Creating a Contact Page with Form
+```html
+<!-- src/pages/contact.njk -->
+{% extends "main.njk" %}
+
+{% block content %}
+<h1>{{ t("contact.title") }}</h1>
+<p>{{ t("contact.description") }}</p>
+
+<form action="/{{ locale }}/submit" method="post">
+  <label for="email">{{ t("contact.email") }}</label>
+  <input type="email" id="email" name="email" required>
+  
+  <label for="message">{{ t("contact.message") }}</label>
+  <textarea id="message" name="message" required></textarea>
+  
+  <button type="submit">{{ t("contact.send") }}</button>
+</form>
+{% endblock %}
+```
+
+### Adding RTL Language Support
+```javascript
+// vite.config.js
+localesMeta: {
+  en: { name: 'English', rtl: false },
+  fr: { name: 'Français', rtl: false },
+  ar: { name: 'العربية', rtl: true }
+}
+```
+
+```html
+<!-- Layout automatically handles RTL -->
+<html lang="{{ locale }}" dir="{% if rtl %}rtl{% else %}ltr{% endif %}">
+```
+
+### Custom 404 Pages
+```html
+<!-- src/pages/404.njk -->
+{% extends "main.njk" %}
+
+{% block content %}
+<h1>{{ t("error.404.title") }}</h1>
+<p>{{ t("error.404.description") }}</p>
+<a href="/{{ locale }}/">{{ t("navigation.home") }}</a>
+{% endblock %}
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Template Syntax Errors**
+- Use Nunjucks syntax: `{% if locale == 'en' %}` not `{{ locale === 'en' }}`
+- Function calls: `{{ t("key") }}` not `{{ t.key }}`
+
+**Missing Translations**
+- Check file encoding (UTF-8)
+- Verify JSON syntax in translation files
+- Use nested keys: `"homepage": { "title": "..." }`
+
+**Module Import Issues**
+- Ensure `"type": "module"` is in package.json
+- Use ES6 import syntax consistently
 
 ## 🤝 Contributing
 

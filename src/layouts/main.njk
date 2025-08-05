@@ -1,8 +1,12 @@
 <!DOCTYPE html>
-<html lang="{{ locale }}">
+<html lang="{{ locale }}" dir="{% if rtl %}rtl{% else %}ltr{% endif %}">
 <head>
   <meta charset="utf-8">
-  <title>{{ t.title or 'My Site' }}</title>
+  <title>{{ t("title") or 'My Site' }}</title>
+  {% for l in alternates %}
+  <link rel="alternate" hreflang="{{ l }}" href="{{ getLocalizedUrl(currentPage, l) }}">
+  {% endfor %}
+  <link rel="alternate" hreflang="x-default" href="{{ getLocalizedUrl(currentPage, defaultLocale) }}">
 </head>
 <body>
   {% include "header.njk" %}
