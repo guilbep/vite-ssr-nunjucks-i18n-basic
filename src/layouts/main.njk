@@ -1,18 +1,44 @@
-<!DOCTYPE html>
-<html lang="{{ locale }}" dir="{% if rtl %}rtl{% else %}ltr{% endif %}">
-<head>
-  <meta charset="utf-8">
-  <title>{{ t("title") or 'My Site' }}</title>
-  {% for l in alternates %}
-  <link rel="alternate" hreflang="{{ l }}" href="{{ getLocalizedUrl(currentPage, l) }}">
-  {% endfor %}
-  <link rel="alternate" hreflang="x-default" href="{{ getLocalizedUrl(currentPage, defaultLocale) }}">
-</head>
-<body>
-  {% include "header.njk" %}
-  <main>
-    {% block content %}{% endblock %}
-  </main>
-  {% include "footer.njk" %}
-</body>
+<!doctype html>
+<html lang="{{ locale or 'en' }}" dir="{% if rtl %}rtl{% else %}ltr{% endif %}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ t("title") or title or 'INPLUGS CO2' }}</title>
+    {% if isProduction and cssHash %}
+    <link rel="stylesheet" href="/assets/styles/main.{{ cssHash }}.css" />
+    <link rel="stylesheet" href="/assets/styles/tokens.{{ cssHash }}.css" />
+    <link rel="stylesheet" href="/assets/styles/navbar.{{ cssHash }}.css" />
+    {% else %}
+    <link rel="stylesheet" href="/assets/styles/main.css" />
+    <link rel="stylesheet" href="/assets/styles/tokens.css" />
+    <link rel="stylesheet" href="/assets/styles/navbar.css" />
+    {% endif %}
+    {% if not allowIndexing %}
+      <meta name="robots" content="noindex,nofollow">
+    {% else %}
+      <link rel="canonical" href="{{ hostname }}{{ pagePath }}">
+      {% for l in alternates %}
+        <link rel="alternate" hreflang="{{ l }}" href="{{ getLocalizedUrl(currentPage, l) }}">
+      {% endfor %}
+      <link rel="alternate" hreflang="x-default" href="{{ getLocalizedUrl(currentPage, defaultLocale) }}">
+    {% endif %}
+  </head>
+  <body>
+    <h1>{{ t("title") or title or 'INPLUGS CO2' }}</h1>
+    {% include "header.njk" %}
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+    {% include "footer.njk" %}
+    {% if isProduction and imgHash %}
+    <img src="/assets/images/logo.{{ imgHash }}.svg" width="400" style="margin-top: 1.5rem">
+    {% else %}
+    <img src="/assets/images/logo.svg" width="400" style="margin-top: 1.5rem">
+    {% endif %}
+    {% if isProduction and jsHash %}
+    <script type="module" src="/assets/js/nav-active-lang.{{ jsHash }}.js"></script>
+    {% else %}
+    <script type="module" src="/assets/js/nav-active-lang.js"></script>
+    {% endif %}
+  </body>
 </html>

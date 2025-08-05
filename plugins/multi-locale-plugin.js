@@ -1,9 +1,10 @@
 import { resolve, join, dirname, basename, extname } from 'path'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, copyFileSync } from 'fs'
 import { glob } from 'glob'
 import nunjucks from 'nunjucks'
 import chokidar from 'chokidar'
 import { minify } from 'html-minifier-terser'
+import { createHash } from 'crypto'
 
 export function multiLocalePlugin(options = {}) {
   const {
@@ -25,6 +26,7 @@ export function multiLocalePlugin(options = {}) {
   let isServing = false
   let server = null
   let isProduction = false
+  let assetHashes = {} // Store asset hashes for cache busting
   
   // Track file modification times for incremental rebuilds
   const fileMTime = new Map()
@@ -85,6 +87,73 @@ export function multiLocalePlugin(options = {}) {
     return path.split('.').reduce((current, key) => current?.[key], obj)
   }
 
+  // Generate content hash for cache busting
+  function generateHash(content) {
+    return createHash('md5').update(content).digest('hex').slice(0, 8)
+  }
+
+  // Copy assets to /assets/ directory (dev: no hash, prod: with hash)
+  function processAssets() {
+    const assetsDir = join(outputDir, 'assets')
+    if (!existsSync(assetsDir)) mkdirSync(assetsDir, { recursive: true })
+    
+    // Reset hashes for this build
+    assetHashes = {}
+    
+    // Process CSS files
+    const cssDir = join(assetsDir, 'styles')
+    if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
+    
+    const cssFiles = ['main.css', 'tokens.css', 'navbar.css']
+    let cssHash = ''
+    cssFiles.forEach(file => {
+      const srcPath = join(srcDir, 'styles', file)
+      if (existsSync(srcPath)) {
+        const content = readFileSync(srcPath, 'utf8')
+        const hash = generateHash(content)
+        cssHash = hash // Use same hash for all CSS files for simplicity
+        const fileName = isProduction ? 
+          file.replace('.css', `.${hash}.css`) : 
+          file
+        copyFileSync(srcPath, join(cssDir, fileName))
+        console.log(`  ✓ ${file} → assets/styles/${fileName}`)
+      }
+    })
+    if (cssHash) assetHashes.cssHash = cssHash
+    
+    // Process JS files  
+    const jsDir = join(assetsDir, 'js')
+    if (!existsSync(jsDir)) mkdirSync(jsDir, { recursive: true })
+    
+    const jsPath = 'public/js/nav-active-lang.js'
+    if (existsSync(jsPath)) {
+      const content = readFileSync(jsPath, 'utf8')
+      const hash = generateHash(content)
+      assetHashes.jsHash = hash
+      const fileName = isProduction ? 
+        `nav-active-lang.${hash}.js` : 
+        'nav-active-lang.js'
+      copyFileSync(jsPath, join(jsDir, fileName))
+      console.log(`  ✓ nav-active-lang.js → assets/js/${fileName}`)
+    }
+    
+    // Process images
+    const imgDir = join(assetsDir, 'images')
+    if (!existsSync(imgDir)) mkdirSync(imgDir, { recursive: true })
+    
+    const logoPath = join(srcDir, 'assets/logo.svg')
+    if (existsSync(logoPath)) {
+      const content = readFileSync(logoPath)
+      const hash = generateHash(content)
+      assetHashes.imgHash = hash
+      const fileName = isProduction ? 
+        `logo.${hash}.svg` : 
+        'logo.svg'
+      copyFileSync(logoPath, join(imgDir, fileName))
+      console.log(`  ✓ logo.svg → assets/images/${fileName}`)
+    }
+  }
+
   // Check if file is stale for incremental rebuilds
   function isStale(file) {
     if (!existsSync(file)) return false
@@ -94,13 +163,16 @@ export function multiLocalePlugin(options = {}) {
     return prev !== m
   }
 
-  // Rewrite root-relative links to be locale-aware
+  // Rewrite root-relative links to be locale-aware (but preserve /assets/ paths)
   function rewriteLinks(html, locale) {
     if (linkRewrite === 'off') return html
-    // Replace href="/xxx" unless already locale-prefixed or external/anchor/mailto
+    // Replace href="/xxx" unless already locale-prefixed, external/anchor/mailto, OR /assets/
     return html.replaceAll(
-      /href="\/(?![a-z]{2}\/|#|mailto:|tel:)([^"]*)"/g,
+      /href="\/(?![a-z]{2}\/|#|mailto:|tel:|assets\/)([^"]*)"/g,
       (_, p) => `href="/${locale}/${p.replace(/^\/+/, '')}"`
+    ).replaceAll(
+      /src="\/(?![a-z]{2}\/|#|mailto:|tel:|assets\/)([^"]*)"/g,
+      (_, p) => `src="/${locale}/${p.replace(/^\/+/, '')}"`
     )
   }
 
@@ -125,6 +197,8 @@ export function multiLocalePlugin(options = {}) {
         alternates,             // for hreflang UI
         defaultLocale,
         rtl: meta.rtl || ['ar','he','fa','ur'].includes(locale),
+        isProduction,           // Add production flag for template
+        ...assetHashes,         // Add asset hashes (cssHash, jsHash, imgHash)
         t: translator,          // Function access: t("homepage.title") 
         // Also provide object access for backward compatibility
         ...Object.fromEntries(
@@ -484,7 +558,8 @@ ${items}
       isServing = true
       server = devServer
       
-      // Generate initial pages
+      // Generate initial pages and assets
+      processAssets()
       generatePages().catch(console.error)
       
       // Setup file watcher
@@ -495,9 +570,29 @@ ${items}
         watcher.close()
       })
       
-      // Custom middleware for locale routing
+      // Custom middleware for locale routing and asset serving
       devServer.middlewares.use((req, res, next) => {
         const url = req.url
+        
+        // Serve shared assets from /assets/ - prevent locale prefixing
+        if (url.startsWith('/assets/')) {
+          const assetPath = join(outputDir, url)
+          if (existsSync(assetPath)) {
+            const content = readFileSync(assetPath)
+            const ext = extname(url)
+            const mimeTypes = {
+              '.css': 'text/css',
+              '.js': 'text/javascript',
+              '.svg': 'image/svg+xml',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg'
+            }
+            res.setHeader('Content-Type', mimeTypes[ext] || 'text/plain')
+            res.setHeader('Cache-Control', 'public, max-age=31536000') // 1 year cache
+            res.end(content)
+            return
+          }
+        }
         
         // If requesting root, serve the redirect page
         if (url === '/' || url === '/index.html') {
@@ -533,6 +628,8 @@ ${items}
         if (!existsSync(outputDir)) {
           mkdirSync(outputDir, { recursive: true })
         }
+        // Process assets for both dev and production
+        processAssets()
         await generatePages()
       }
     },
