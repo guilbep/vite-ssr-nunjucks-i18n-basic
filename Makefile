@@ -41,8 +41,9 @@ build: clean ## Build for production
 	npm run build
 	@echo "$(GREEN)✓ Production build complete$(NC)"
 
-prod: build up ## Build and run production with Docker
-	@echo "$(GREEN)✓ Production environment ready$(NC)"
+prod: build ## Build and serve production locally
+	@echo "$(GREEN)Serving production build locally...$(NC)"
+	npm run preview
 
 ##@ Docker Management
 up: ## Start Docker containers

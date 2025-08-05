@@ -105,21 +105,30 @@ export function multiLocalePlugin(options = {}) {
     if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
     
     const cssFiles = ['main.css', 'tokens.css', 'navbar.css']
-    let cssHash = ''
+    let combinedCssContent = ''
+    
+    // First pass: read all CSS content to create a combined hash
     cssFiles.forEach(file => {
       const srcPath = join(srcDir, 'styles', file)
       if (existsSync(srcPath)) {
-        const content = readFileSync(srcPath, 'utf8')
-        const hash = generateHash(content)
-        cssHash = hash // Use same hash for all CSS files for simplicity
+        combinedCssContent += readFileSync(srcPath, 'utf8')
+      }
+    })
+    
+    const cssHash = combinedCssContent ? generateHash(combinedCssContent) : ''
+    if (cssHash) assetHashes.cssHash = cssHash
+    
+    // Second pass: copy files with the combined hash
+    cssFiles.forEach(file => {
+      const srcPath = join(srcDir, 'styles', file)
+      if (existsSync(srcPath)) {
         const fileName = isProduction ? 
-          file.replace('.css', `.${hash}.css`) : 
+          file.replace('.css', `.${cssHash}.css`) : 
           file
         copyFileSync(srcPath, join(cssDir, fileName))
         console.log(`  ✓ ${file} → assets/styles/${fileName}`)
       }
     })
-    if (cssHash) assetHashes.cssHash = cssHash
     
     // Process JS files  
     const jsDir = join(assetsDir, 'js')
