@@ -1,0 +1,67 @@
+@layer components {
+  :host {
+    display: block;
+    background: var(--brand-bg);
+    color: var(--brand-fg);
+    font:
+      500 16px/1.4 system-ui,
+      -apple-system,
+      Segoe UI,
+      Roboto,
+      sans-serif;
+    box-shadow: var(--shadow);
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: var(--container);
+    margin-inline: auto;
+    padding: var(--space-3);
+  }
+  h1 {
+    font-size: 1rem;
+    margin: 0 var(--space-3) 0 0;
+    letter-spacing: 0.3px;
+  }
+  nav {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  nav a {
+    color: var(--brand-fg);
+    text-decoration: none;
+    opacity: 0.9;
+    padding: 0.2rem 0.4rem;
+    border-radius: 6px;
+  }
+  nav a:hover,
+  nav a:focus-visible {
+    opacity: 1;
+    outline: none;
+    background: color-mix(in oklab, var(--brand-fg) 12%, transparent);
+  }
+  nav a[aria-current='page'] {
+    text-decoration: underline;
+  }
+
+  /* Language switcher */
+  .lang {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0.9;
+  }
+  .lang a {
+    color: var(--brand-fg);
+    text-decoration: none;
+    padding: 0.15rem 0.35rem;
+    border-radius: 6px;
+  }
+  .lang a[aria-current='true'] {
+    background: color-mix(in oklab, var(--brand-fg) 15%, transparent);
+    opacity: 1;
+  }
+}

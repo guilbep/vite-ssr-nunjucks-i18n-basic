@@ -1,0 +1,42 @@
+@layer reset, tokens, components, utilities;
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+}
+
+@layer tokens {
+  :root {
+    --brand-bg: #1f2937; /* slate-800 */
+    --brand-fg: #ffffff;
+    --brand-accent: #f97316; /* orange-500 */
+    --container: min(1100px, 92vw);
+    --space-2: 0.5rem;
+    --space-3: 1rem;
+    --radius: 12px;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    color-scheme: light dark;
+  }
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+@layer utilities {
+  .container {
+    width: var(--container);
+    margin-inline: auto;
+    padding: var(--space-3);
+  }
+  .section {
+    scroll-margin-top: 5rem;
+  }
+}

@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    image: epfl-lms/gcs-mpa:latest
+    container_name: gcs-mpa
+    ports:
+      - "8080:80"   # behind LB/ingress map 80/443 -> 8080 as you like
+    restart: unless-stopped
