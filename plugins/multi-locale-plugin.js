@@ -201,6 +201,7 @@ export function multiLocalePlugin(options = {}) {
     // Files/paths to exclude from public copy (will be processed separately)
     const excludePatterns = [
       'js/nav-active-lang.js', // This gets processed with hash
+      'site.webmanifest', // This gets localized per locale
     ]
 
     function shouldExclude(relativePath) {
@@ -330,7 +331,7 @@ export function multiLocalePlugin(options = {}) {
       }
       
       // If it's already a properly formatted route path, leave it
-      if (href.startsWith('/en/') || href.startsWith('/fr/')) {
+      if (href.startsWith('/en/') || href.startsWith('/fr/') || href === '/en' || href === '/fr') {
         return match
       }
       
@@ -608,6 +609,67 @@ ${items}
     }
   }
 
+  // Generate localized site.webmanifest files
+  async function generateWebManifests(routesConfig, localeData) {
+    const manifestPath = 'public/site.webmanifest'
+    if (!existsSync(manifestPath)) {
+      console.warn('site.webmanifest not found in public directory, skipping manifest generation')
+      return
+    }
+
+    try {
+      const baseManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      
+      for (const locale of locales) {
+        const meta = localesMeta[locale] || {}
+        const translator = makeTranslator(localeData, locale, defaultLocale)
+        
+        // Get the home route for this locale as start_url
+        const homeRoute = getRoutePath('index', locale, routesConfig) || `/${locale}/`
+        
+        // Create localized manifest
+        const localizedManifest = {
+          ...baseManifest,
+          lang: locale,
+          dir: meta.rtl || ['ar','he','fa','ur'].includes(locale) ? 'rtl' : 'ltr',
+          start_url: homeRoute
+        }
+
+        // Try to localize name and short_name if translations exist
+        const localizedName = translator('site.name') || translator('meta.title')
+        const localizedShortName = translator('site.short_name') || translator('meta.short_title')
+        
+        if (localizedName && localizedName !== 'site.name' && localizedName !== 'meta.title') {
+          localizedManifest.name = localizedName
+        }
+        if (localizedShortName && localizedShortName !== 'site.short_name' && localizedShortName !== 'meta.short_title') {
+          localizedManifest.short_name = localizedShortName
+        }
+
+        // Determine output path based on locale directory structure
+        const localeRoutes = routesConfig.routes?.[locale] || []
+        const indexRoute = localeRoutes.find(r => r.key === 'index')
+        // For paths like "/en/" or "/fr/", extract the locale part
+        let localeDir = locale // fallback
+        if (indexRoute) {
+          const pathParts = indexRoute.path.split('/').filter(p => p) // Remove empty parts
+          localeDir = pathParts[0] || locale
+        }
+        
+        const outputPath = join(outputDir, localeDir)
+        if (!existsSync(outputPath)) {
+          mkdirSync(outputPath, { recursive: true })
+        }
+        
+        const outputFile = join(outputPath, 'site.webmanifest')
+        writeFileSync(outputFile, JSON.stringify(localizedManifest, null, 2))
+        console.log(`  ✓ ${localeDir}/site.webmanifest`)
+      }
+    } catch (err) {
+      console.error('Error generating webmanifests:', err.message)
+    }
+  }
+
   // Rebuild specific base page for incremental builds
   async function rebuildBase(base, localeData, routesConfig, metaData) {
     const byBase = new Map()
@@ -743,6 +805,9 @@ ${items}
     if (emit404s) {
       await write404s(routesConfig)
     }
+    
+    // Generate localized webmanifests
+    await generateWebManifests(routesConfig, localeData)
   }
 
   // Setup file watcher for development with incremental rebuilds
@@ -864,10 +929,103 @@ ${items}
             const routePath = route.path.replace(/\/$/, '')
             const urlPath = url.replace(/\/$/, '')
             
-            if (routePath === urlPath || (routePath === '' && urlPath === `/${locale}`)) {
-              // Convert route path to file path
+            if (routePath === urlPath) {
+              // Convert route path to file path using same logic as renderOne
               let filePath = route.path.replace(/^\//, '').replace(/\/$/, '')
               if (!filePath) filePath = 'index'
+              
+              // For index routes, place them in the locale directory structure
+              if (filePath === 'en' || filePath === 'fr') {
+                filePath = filePath + '/index'
+              }
+              
+              if (!filePath.endsWith('.html')) filePath += '.html'
+              
+              const fullPath = join(outputDir, filePath)
+              if (existsSync(fullPath)) {
+                const html = readFileSync(fullPath, 'utf8')
+                res.setHeader('Content-Type', 'text/html')
+                res.end(html)
+                return
+              }
+            }
+          }
+        }
+        
+        // Legacy fallback: If requesting a locale-specific page with old structure
+        const localeMatch = url.match(/^\/([a-z]{2})\/(.*)/)
+        if (localeMatch) {
+          const [, locale, path] = localeMatch
+          if (locales.includes(locale)) {
+            const filePath = `${outputDir}/${locale}/${path || 'index.html'}`
+            if (existsSync(filePath)) {
+              const html = readFileSync(filePath, 'utf8')
+              res.setHeader('Content-Type', 'text/html')
+              res.end(html)
+              return
+            }
+          }
+        }
+        
+        next()
+      })
+    },
+    
+    configurePreviewServer(previewServer) {
+      // Same middleware logic for preview mode
+      previewServer.middlewares.use((req, res, next) => {
+        const url = req.url
+        
+        // Serve shared assets from /assets/ - prevent locale prefixing
+        if (url.startsWith('/assets/')) {
+          const assetPath = join(outputDir, url)
+          if (existsSync(assetPath)) {
+            const content = readFileSync(assetPath)
+            const ext = extname(url)
+            const mimeTypes = {
+              '.css': 'text/css',
+              '.js': 'text/javascript',
+              '.svg': 'image/svg+xml',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg'
+            }
+            res.setHeader('Content-Type', mimeTypes[ext] || 'text/plain')
+            res.setHeader('Cache-Control', 'public, max-age=31536000') // 1 year cache
+            res.end(content)
+            return
+          }
+        }
+        
+        // If requesting root, serve the redirect page
+        if (url === '/' || url === '/index.html') {
+          const redirectHtml = readFileSync(`${outputDir}/index.html`, 'utf8')
+          res.setHeader('Content-Type', 'text/html')
+          res.end(redirectHtml)
+          return
+        }
+        
+        // Load routes configuration for URL matching
+        const routesConfig = loadRoutesConfig()
+        const routes = routesConfig.routes || {}
+        
+        // Try to match the URL to a route in any locale
+        for (const locale of locales) {
+          const localeRoutes = routes[locale] || []
+          for (const route of localeRoutes) {
+            // Check if URL matches this route (with or without trailing slash)
+            const routePath = route.path.replace(/\/$/, '')
+            const urlPath = url.replace(/\/$/, '')
+            
+            if (routePath === urlPath) {
+              // Convert route path to file path using same logic as renderOne
+              let filePath = route.path.replace(/^\//, '').replace(/\/$/, '')
+              if (!filePath) filePath = 'index'
+              
+              // For index routes, place them in the locale directory structure
+              if (filePath === 'en' || filePath === 'fr') {
+                filePath = filePath + '/index'
+              }
+              
               if (!filePath.endsWith('.html')) filePath += '.html'
               
               const fullPath = join(outputDir, filePath)

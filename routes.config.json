@@ -6,7 +6,7 @@
       { "key": "index", "path": "/en/", "title": "Home" },
       {
         "key": "gcs",
-        "path": "/en/gcs/",
+        "path": "/en/gcs",
         "title": "GCS",
         "anchors": [
           { "id": "why", "title": "Why is GCS?" },
@@ -15,10 +15,10 @@
           { "id": "switzerland", "title": "GCS in Switzerland" }
         ]
       },
-      { "key": "data", "path": "/en/data/", "title": "Data" },
+      { "key": "data", "path": "/en/data", "title": "Data" },
       {
         "key": "education",
-        "path": "/en/education/",
+        "path": "/en/education",
         "title": "Education",
         "anchors": [
           { "id": "carbon-team", "title": "Carbon team" },
@@ -26,16 +26,16 @@
           { "id": "visits", "title": "Visits" }
         ]
       },
-      { "key": "dictionary", "path": "/en/dictionary/", "title": "Dictionary" },
-      { "key": "links", "path": "/en/useful-links/", "title": "Useful links" },
-      { "key": "about", "path": "/en/about/", "title": "About" },
-      { "key": "contact", "path": "/en/contact/", "title": "Contact" }
+      { "key": "dictionary", "path": "/en/dictionary", "title": "Dictionary" },
+      { "key": "links", "path": "/en/useful-links", "title": "Useful links" },
+      { "key": "about", "path": "/en/about", "title": "About" },
+      { "key": "contact", "path": "/en/contact", "title": "Contact" }
     ],
     "fr": [
       { "key": "index", "path": "/fr/", "title": "Accueil" },
       {
         "key": "gcs",
-        "path": "/fr/gcs/",
+        "path": "/fr/gcs",
         "title": "GCS",
         "anchors": [
           { "id": "why", "title": "Pourquoi le GCS ?" },
@@ -44,10 +44,10 @@
           { "id": "switzerland", "title": "Le GCS en Suisse" }
         ]
       },
-      { "key": "data", "path": "/fr/data/", "title": "Données" },
+      { "key": "data", "path": "/fr/data", "title": "Données" },
       {
         "key": "education",
-        "path": "/fr/education/",
+        "path": "/fr/education",
         "title": "Éducation",
         "anchors": [
           { "id": "carbon-team", "title": "Équipe carbone" },
@@ -55,10 +55,10 @@
           { "id": "visits", "title": "Visites" }
         ]
       },
-      { "key": "dictionary", "path": "/fr/dictionnaire/", "title": "Dictionnaire" },
-      { "key": "links", "path": "/fr/liens-utiles/", "title": "Liens utiles" },
-      { "key": "about", "path": "/fr/a-propos/", "title": "À propos" },
-      { "key": "contact", "path": "/fr/contact/", "title": "Contact" }
+      { "key": "dictionary", "path": "/fr/dictionnaire", "title": "Dictionnaire" },
+      { "key": "links", "path": "/fr/liens-utiles", "title": "Liens utiles" },
+      { "key": "about", "path": "/fr/a-propos", "title": "À propos" },
+      { "key": "contact", "path": "/fr/contact", "title": "Contact" }
     ]
   }
 }
