@@ -1,9 +1,32 @@
 {
-  "name": "new-test",
+  "name": "vite-ssr-nunjucks-i18n-basic",
   "version": "1.0.0",
+  "description": "A modern, fast, and SEO-friendly multi-locale static site generator powered by Vite and Nunjucks",
   "main": "vite.config.js",
+  "keywords": [
+    "vite",
+    "nunjucks",
+    "i18n",
+    "internationalization",
+    "multi-locale",
+    "static-site-generator",
+    "ssg",
+    "templates",
+    "html",
+    "build-tool"
+  ],
+  "author": "Pierre Guilbert <guilbep@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/issues"
+  },
+  "homepage": "https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic#readme",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node -e \"console.log('✅ Build test passed!')\"",
     "start": "vite",
     "dev": "vite dev",
     "build": "vite build",
@@ -12,9 +35,6 @@
     "format": "prettier -w .",
     "lint:commit": "commitlint --edit"
   },
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "chokidar": "^3.6.0",
     "glob": "^11.0.3",
