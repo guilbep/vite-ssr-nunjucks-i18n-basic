@@ -1,15 +1,39 @@
-<header>
-  <nav>
-    <h1>{{ t("siteName") or 'My Website' }}</h1>
-    <ul>
-      {% for loc in alternates %}
-        <li>
-          <a href="{{ getLocalizedUrl(currentPage, loc) }}" 
-             {% if locale == loc %}class="active"{% endif %}>
-            {{ loc | upper }}
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-  </nav>
-</header>
+<site-header>
+  <template shadowrootmode="open">
+    {% if isProduction and cssHash %}
+    <link rel="stylesheet" href="/assets/styles/navbar.{{ cssHash }}.css">
+    {% else %}
+    <link rel="stylesheet" href="/assets/styles/navbar.css">
+    {% endif %}
+    <header class="nav">
+      <h1><slot name="title">{{ t('site.name') }}</slot></h1>
+      <nav>
+        {% for item in navItems %}
+          <a href="{{ item.path }}" {% if page.key == item.key %}aria-current="page"{% endif %}>{{ item.title }}</a>
+        {% endfor %}
+      </nav>
+      <div class="lang">
+        {% for loc in alternates %}
+          {% if page.routes[loc] %}
+            <a data-lang="{{ loc }}" href="{{ page.routes[loc] }}" 
+               {% if locale == loc %}class="active"{% endif %}
+               aria-label="Switch to {{ loc | upper }}">{{ loc | upper }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </header>
+  </template>
+</site-header>
+
+<script type="speculationrules">
+{
+  "prerender": [{
+    "urls": ["/{{ locale }}/gcs/", "/{{ locale }}/data/", "/{{ locale }}/education/"],
+    "eagerness": "moderate"
+  }],
+  "prefetch": [{
+    "where": { "selector_matches": "nav a", "href_matches": "/{{ locale }}/.+" },
+    "eagerness": "conservative"
+  }]
+}
+</script>

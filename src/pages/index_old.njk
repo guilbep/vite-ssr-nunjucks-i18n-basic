@@ -1,0 +1,21 @@
+{% extends "main.njk" %}
+
+{% block content %}
+<h1>{{ t("homepage.title") }}</h1>
+<h2>{{ t("homepage.subtitle") }}</h2>
+<p>{{ t("homepage.greeting", { name: "User" }) }}</p>
+
+<nav>
+  <a href="{{ getRouteUrl('about') }}">{{ t("navigation.about") or 'About' }}</a>
+  <a href="{{ getRouteUrl('contact') }}">{{ t("navigation.contact") or 'Contact' }}</a>
+  <a href="{{ getRouteUrl('gcs') }}">{{ t("navigation.gcs") or 'GCS' }}</a>
+</nav>
+
+<p>Current page: {{ page.path }}</p>
+<p>Available routes for this page:</p>
+<ul>
+{% for locale, path in page.routes %}
+  <li>{{ locale }}: <a href="{{ path }}">{{ path }}</a></li>
+{% endfor %}
+</ul>
+{% endblock %}

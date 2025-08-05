@@ -1,15 +1,11 @@
 {% extends "main.njk" %}
 
 {% block content %}
+<h2>{{ catalogs[locale or 'en']['about.title'] if catalogs else 'About' }}</h2>
+{% block content %}
 <h1>{{ t("about.title") }}</h1>
 <p>{{ t("about.description") }}</p>
 
-<nav>
-  {% for loc in alternates %}
-    <a href="{{ getLocalizedUrl('/about.html', loc) }}" 
-       {% if locale == loc %}class="active"{% endif %}>
-      {{ loc | upper }}
-    </a>
-  {% endfor %}
-</nav>
+<p>Learn more about the INPLUGS CO2 project and our mission in carbon storage and removal research.</p>
+<p>This platform provides comprehensive information about geological carbon storage (GCS) technologies and their applications.</p>
 {% endblock %}

@@ -289,6 +289,13 @@ export function multiLocalePlugin(options = {}) {
     currentTranslator = translator
     
     try {
+      // Get navigation items from routes config for current locale
+      const navItems = (routesConfig.routes?.[locale] || []).map(route => ({
+        key: route.key,
+        title: route.title,
+        path: route.path
+      }))
+      
       let html = env.render(templateName, {
         locale,
         locales,
@@ -302,6 +309,7 @@ export function multiLocalePlugin(options = {}) {
         ...Object.fromEntries(
           Object.entries(localeData[locale] || localeData[defaultLocale] || {})
         ),
+        navItems,               // Navigation items from routes config
         currentPage: routePath,
         page: { 
           slug: pageKey,
