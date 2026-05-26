@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{{ title }}</title>
+        <script>
+    // Language detection and redirect with cookie support
+    const qs = new URLSearchParams(location.search);
+    const forced = qs.get('lang');
+    const supportedLocales = {{ locales | dump | safe }};
+    const defaultLocale = '{{ defaultLocale }}';
+    const routes = {{ routes | dump | safe }};
+    
+    const COOKIE = 'lang=';
+    const getCookie = () => document.cookie.split('; ').find(c => c.startsWith(COOKIE))?.slice(COOKIE.length);
+    
+    function getPreferredLocale() {
+      // Check URL parameter first
+      if (forced && supportedLocales.includes(forced)) {
+        return forced;
+      }
+      
+      // Check localStorage for saved preference
+      const saved = localStorage.getItem('preferred-locale');
+      if (saved && supportedLocales.includes(saved)) {
+        return saved;
+      }
+      
+      // Check cookie
+      const cookieLocale = getCookie();
+      if (cookieLocale && supportedLocales.includes(cookieLocale)) {
+        return cookieLocale;
+      }
+      
+      // Check browser language
+      const userLang = (navigator.language || navigator.userLanguage).toLowerCase();
+      const browserLocale = userLang.split('-')[0];
+      
+      return supportedLocales.includes(browserLocale) ? browserLocale : defaultLocale;
+    }
+    
+    function redirect() {
+      const locale = getPreferredLocale();
+      
+      // Save preferences
+      localStorage.setItem('preferred-locale', locale);
+      document.cookie = `lang=${locale}; path=/; max-age=${60*60*24*365}`; // 1 year
+      
+      // Get the home route for the selected language
+      const localeRoutes = routes[locale] || [];
+      const homeRoute = localeRoutes.find(r => r.key === 'index');
+      const targetPath = homeRoute ? homeRoute.path : `/${locale}/`;
+      
+      // Redirect
+      window.location.replace(targetPath);
+    }
+    
+    // Redirect immediately
+    redirect();
+        </script>
+        <noscript>
+            <meta http-equiv="refresh" content="0; url=/{{ defaultLocale }}">
+        </noscript>
+    </head>
+    <body>
+        <p>Redirecting to your preferred language...</p>
+        <nav>
+            <ul>
+                {%- for locale in locales %}
+                    <li>
+                        <a href="/{{ locale }}">{{ locale | upper }}</a>
+                    </li>
+                {%- endfor %}
+            </ul>
+        </nav>
+    </body>
+</html>

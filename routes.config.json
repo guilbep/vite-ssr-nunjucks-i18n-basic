@@ -1,0 +1,36 @@
+{
+  "hostname": "https://example.com",
+  "locales": ["en", "fr"],
+  "basePath": {
+    "en": "/en",
+    "fr": "/fr"
+  },
+  "routes": [
+    {
+      "key": "index",
+      "path": "/",
+      "title": {
+        "en": "Home",
+        "fr": "Accueil"
+      },
+      "hidden": false
+    },
+    {
+      "key": "about",
+      "path": {
+        "en": "/about",
+        "fr": "/a-propos"
+      },
+      "title": {
+        "en": "About",
+        "fr": "À propos"
+      }
+    },
+    {
+      "key": "404",
+      "path": "/404",
+      "title": "Not Found",
+      "hidden": true
+    }
+  ]
+}

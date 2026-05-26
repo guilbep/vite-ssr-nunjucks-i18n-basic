@@ -1,560 +1,809 @@
-import { resolve, join, dirname, basename, extname } from 'path'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
-import { glob } from 'glob'
-import nunjucks from 'nunjucks'
-import chokidar from 'chokidar'
-import { minify } from 'html-minifier-terser'
+/**
+ * Multi-Locale Vite Plugin
+ *
+ * A comprehensive static site generator with internationalization support.
+ * Refactored into modular components for better maintainability:
+ *
+ * Utils:
+ * - locale-utils.js: Core locale utilities and functions
+ * - asset-processor.js: Handles CSS, JS, and image assets with cache busting
+ * - page-renderer.js: Template rendering and page generation
+ *
+ * Generators (using Nunjucks templates from plugins/templates/):
+ * - sitemap-generator.js: XML sitemap generation
+ * - notfound-generator.js: 404 page generation
+ * - webmanifest-generator.js: Localized PWA manifests
+ * - root-redirect-generator.js: Root index.html with language detection
+ *
+ * Templates:
+ * - sitemap.xml.njk: Sitemap template with hreflang support
+ * - sitemap-index.xml.njk: Sitemap index template
+ * - 404.html.njk: 404 error page template
+ * - manifest.json.njk: PWA manifest template
+ * - root-redirect.html.njk: Root redirect page template
+ */
+
+import { resolve, join, dirname, basename, extname } from "path";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  rmSync,
+} from "fs";
+import { glob } from "glob";
+import nunjucks from "nunjucks";
+import chokidar from "chokidar";
+
+// Import refactored modules
+import { AssetProcessor } from "./utils/asset-processor.js";
+import { PageRenderer } from "./utils/page-renderer.js";
+import { SitemapGenerator } from "./generators/sitemap-generator.js";
+import { NotFoundGenerator } from "./generators/notfound-generator.js";
+import { WebmanifestGenerator } from "./generators/webmanifest-generator.js";
+import { RootRedirectGenerator } from "./generators/root-redirect-generator.js";
+import {
+  LOCALE_RE,
+  loadRoutesConfig,
+  loadLocaleData,
+  loadMetaData,
+  getRoutePath,
+} from "./utils/locale-utils.js";
 
 export function multiLocalePlugin(options = {}) {
   const {
-    srcDir = 'src',
-    pagesDir = 'src/pages',
-    layoutsDir = 'src/layouts', 
-    partialsDir = 'src/partials',
-    dataDir = 'src/data',
-    outputDir = 'dist',
-    defaultLocale = 'en',
-    locales = ['en', 'fr'],
-    siteUrl = 'https://example.com',
+    srcDir = "src",
+    pagesDir = "src/pages",
+    layoutsDir = "src/layouts",
+    partialsDir = "src/partials",
+    dataDir = "src/data",
+    outputDir = "dist",
+    devOutputDir = ".tmp", // Separate directory for development
+    defaultLocale = "en",
+    locales = ["en", "fr"],
+    siteUrl = "https://example.com",
     localesMeta = {},
     emitSitemaps = true,
     emit404s = true,
-    linkRewrite = 'safety-net'
-  } = options
+    linkRewrite = "safety-net",
+    copyPublic = true, // Option to disable public directory copying
+  } = options;
 
-  let isServing = false
-  let server = null
-  let isProduction = false
-  
+  // Validate required directories exist
+  const requiredDirs = [srcDir, pagesDir, layoutsDir, partialsDir, dataDir];
+  for (const dir of requiredDirs) {
+    if (!existsSync(dir)) {
+      throw new Error(
+        `Required directory "${dir}" does not exist. Please create it or adjust your plugin configuration.`,
+      );
+    }
+  }
+
+  // Validate locales configuration
+  if (!Array.isArray(locales) || locales.length === 0) {
+    throw new Error("locales must be a non-empty array");
+  }
+
+  if (!locales.includes(defaultLocale)) {
+    throw new Error(
+      `defaultLocale "${defaultLocale}" must be included in locales array`,
+    );
+  }
+
+  let isServing = false;
+  let server = null;
+  let isProduction = false;
+  let currentOutputDir = outputDir; // Will be set based on mode
+
+  // Initialize component modules with correct output directory
+  const assetProcessor = new AssetProcessor({
+    srcDir,
+    outputDir: isProduction ? outputDir : devOutputDir, // Use correct directory based on mode
+    copyPublic,
+  });
+
+  const pageRenderer = new PageRenderer({
+    outputDir: currentOutputDir,
+    pagesDir,
+    dataDir,
+    locales,
+    defaultLocale,
+    localesMeta,
+    linkRewrite,
+  });
+
+  const sitemapGenerator = new SitemapGenerator({
+    outputDir: currentOutputDir,
+    siteUrl,
+    locales,
+  });
+
+  const notFoundGenerator = new NotFoundGenerator({
+    outputDir: currentOutputDir,
+    pagesDir,
+    dataDir,
+    locales,
+    defaultLocale,
+    localesMeta,
+  });
+
+  const webmanifestGenerator = new WebmanifestGenerator({
+    outputDir: currentOutputDir,
+    locales,
+    defaultLocale,
+    localesMeta,
+  });
+
+  const rootRedirectGenerator = new RootRedirectGenerator({
+    outputDir: currentOutputDir,
+    locales,
+    defaultLocale,
+  });
+
   // Track file modification times for incremental rebuilds
-  const fileMTime = new Map()
-  
-  // Locale regex for co-located variants
-  const LOCALE_RE = /\.([a-z]{2})\.njk$/
-  
+  const fileMTime = new Map();
+
+  // Cleanup function for development
+  function cleanupDevDirectory() {
+    if (!isProduction && existsSync(devOutputDir)) {
+      try {
+        rmSync(devOutputDir, { recursive: true, force: true });
+        console.log(`🧹 Cleaned up ${devOutputDir} directory`);
+      } catch (error) {
+        console.warn(`⚠️  Could not clean up ${devOutputDir}:`, error.message);
+      }
+    }
+  }
+
+  // Setup cleanup on process exit
+  function setupCleanup() {
+    const cleanup = () => {
+      cleanupDevDirectory();
+      process.exit(0);
+    };
+
+    // Handle various exit signals
+    process.on("SIGINT", cleanup); // Ctrl+C
+    process.on("SIGTERM", cleanup); // Termination signal
+    process.on("exit", cleanupDevDirectory); // Process exit
+  }
+
   // Configure Nunjucks
   const env = nunjucks.configure([srcDir, layoutsDir, partialsDir], {
     autoescape: true,
     watch: false, // We handle watching ourselves
-  })
+    noCache: true, // Disable template caching for development
+  });
 
   // Add Nunjucks globals and filters
-  env.addFilter('locale_url', (p, l) => `/${l}${p.startsWith('/') ? '' : '/'}${p}`)
-  env.addFilter('eq', (a, b) => a === b)
-  
+  env.addFilter(
+    "locale_url",
+    (p, l) => `/${l}${p.startsWith("/") ? "" : "/"}${p}`,
+  );
+  env.addFilter("eq", (a, b) => a === b);
+
+  // Add Eleventy-like filters for compatibility
+  env.addFilter("url", (p) => {
+    // Simple URL filter - handles asset paths and regular paths
+    if (!p) return "/";
+
+    // If it's already an absolute URL or starts with /, return as-is
+    if (p.startsWith("http") || p.startsWith("/")) return p;
+
+    // For relative paths, prepend with /
+    return "/" + p;
+  });
+
+  env.addFilter("absoluteUrl", (path, baseUrl) => {
+    // Create absolute URL by combining path with base URL
+    if (!path) return baseUrl || "";
+    if (!baseUrl) return path;
+
+    // If path is already absolute, return as-is
+    if (path.startsWith("http")) return path;
+
+    // Ensure baseUrl doesn't end with slash and path starts with slash
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const cleanPath = path.startsWith("/") ? path : "/" + path;
+
+    return cleanBase + cleanPath;
+  });
+
   // Global translator - will be set per render
-  let currentTranslator = null
-  env.addGlobal('t', function(key, params) {
-    return currentTranslator ? currentTranslator(key, params) : key
-  })
+  env.addGlobal("t", function (key, params) {
+    return currentTranslator ? currentTranslator(key, params) : key;
+  });
 
-  // Load locale data
-  function loadLocaleData() {
-    const localeData = {}
-    for (const locale of locales) {
-      try {
-        const data = JSON.parse(readFileSync(`${dataDir}/${locale}.json`, 'utf8'))
-        localeData[locale] = data
-      } catch (err) {
-        console.warn(`Could not load locale data for ${locale}:`, err.message)
-        localeData[locale] = {}
-      }
-    }
-    return localeData
-  }
-
-  // Create real t() function with fallback and params - now supports nested keys
-  function makeTranslator(localeData, locale, defaultLocale) {
-    const L = localeData[locale] || {}
-    const D = localeData[defaultLocale] || {}
-    
-    return (key, params = {}) => {
-      // Support nested keys like "homepage.title"
-      let s = getNestedValue(L, key) ?? getNestedValue(D, key) ?? key
-      
-      // Handle parameter interpolation
-      for (const [k, v] of Object.entries(params)) {
-        s = s.replaceAll(`{{${k}}}`, String(v))
-      }
-      return s
-    }
-  }
-  
-  // Helper function to get nested object values
-  function getNestedValue(obj, path) {
-    return path.split('.').reduce((current, key) => current?.[key], obj)
-  }
+  // If not found in manifest, fall back to the logical path
+  //
+  const manifest = assetProcessor.getManifest();
+  console.log("manifest", manifest);
+  env.addGlobal("asset", (logicalPath) => manifest[logicalPath] || logicalPath);
+  env.addGlobal("manifest", manifest);
+  // Set Nunjucks environment for all components that need it
+  pageRenderer.setNunjucksEnv(env);
+  notFoundGenerator.setNunjucksEnv(env);
 
   // Check if file is stale for incremental rebuilds
   function isStale(file) {
-    if (!existsSync(file)) return false
-    const m = statSync(file).mtimeMs
-    const prev = fileMTime.get(file)
-    fileMTime.set(file, m)
-    return prev !== m
-  }
-
-  // Rewrite root-relative links to be locale-aware
-  function rewriteLinks(html, locale) {
-    if (linkRewrite === 'off') return html
-    // Replace href="/xxx" unless already locale-prefixed or external/anchor/mailto
-    return html.replaceAll(
-      /href="\/(?![a-z]{2}\/|#|mailto:|tel:)([^"]*)"/g,
-      (_, p) => `href="/${locale}/${p.replace(/^\/+/, '')}"`
-    )
-  }
-
-  // Render one page for a specific locale
-  async function renderOne({ relTemplate, baseRel, locale, availableLocales, localeData }) {
-    const templateName = 'pages/' + relTemplate
-    const pageName = baseRel.replace('.njk', '.html') // stable slug
-    // Include all configured locales in alternates for navigation
-    const alternates = [...locales] // All locales should be navigable
-    const meta = localesMeta[locale] || {}
-    
-    // Create translator for this locale
-    const translator = makeTranslator(localeData, locale, defaultLocale)
-    
-    // Set the global translator for this render
-    currentTranslator = translator
-    
-    try {
-      let html = env.render(templateName, {
-        locale,
-        locales,
-        alternates,             // for hreflang UI
-        defaultLocale,
-        rtl: meta.rtl || ['ar','he','fa','ur'].includes(locale),
-        t: translator,          // Function access: t("homepage.title") 
-        // Also provide object access for backward compatibility
-        ...Object.fromEntries(
-          Object.entries(localeData[locale] || localeData[defaultLocale] || {})
-        ),
-        currentPage: `/${pageName}`,
-        page: { slug: pageName.replace('.html', '') },
-        isCurrentLocale: l => l === locale,
-        getLocalizedUrl: (path, targetLocale = locale) => {
-          const cleanPath = path.replace(/^\/([a-z]{2})\//,'')
-          return `/${targetLocale}/${cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath}`
-        }
-      })
-      
-      // Rewrite links if enabled
-      html = rewriteLinks(html, locale)
-      
-      // Minify HTML in production
-      if (isProduction) {
-        html = await minify(html, {
-          removeComments: true,
-          removeRedundantAttributes: true,
-          removeScriptTypeAttributes: true,
-          removeStyleLinkTypeAttributes: true,
-          sortClassName: true,
-          useShortDoctype: true,
-          collapseWhitespace: true,
-          conservativeCollapse: true,
-          preserveLineBreaks: false,
-          minifyCSS: true,
-          minifyJS: true
-        })
-      }
-      
-      // Create output directory
-      const outputPath = `${outputDir}/${locale}`
-      if (!existsSync(outputPath)) {
-        mkdirSync(outputPath, { recursive: true })
-      }
-      
-      // Write the file
-      const outputFile = `${outputPath}/${pageName}`
-      const outputFileDir = dirname(outputFile)
-      if (!existsSync(outputFileDir)) {
-        mkdirSync(outputFileDir, { recursive: true })
-      }
-      
-      writeFileSync(outputFile, html)
-      console.log(`  ✓ ${locale}/${pageName}`)
-      
-    } catch (err) {
-      console.error(`  ✗ Error rendering ${locale}/${pageName}:`, err.message)
-    } finally {
-      // Reset global translator
-      currentTranslator = null
-    }
-  }
-
-  // Generate localized sitemaps
-  function buildSitemaps() {
-    const urlsets = new Map() // locale => Set(paths)
-    for (const locale of locales) urlsets.set(locale, new Set())
-    
-    for (const file of glob.sync(`${outputDir}/{${locales.join(',')}}/**/*.html`)) {
-      const m = file.match(new RegExp(`${outputDir}/([a-z]{2})/(.*)\\.html$`))
-      if (!m) continue
-      const [, locale, path] = m
-      // Build proper URL structure
-      let loc = `${siteUrl}/${locale}/`
-      if (path && path !== 'index') {
-        loc += `${path}/`
-      }
-      urlsets.get(locale).add(loc)
-    }
-
-    // per-locale sitemaps
-    for (const [locale, set] of urlsets) {
-      const urls = [...set].sort().map(u => `  <url><loc>${u}</loc></url>`).join('\n')
-      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`
-      writeFileSync(join(outputDir, `sitemap-${locale}.xml`), sitemap)
-      console.log(`  ✓ sitemap-${locale}.xml`)
-    }
-
-    // index
-    const items = locales.map(l =>
-      `  <sitemap><loc>${siteUrl}/sitemap-${l}.xml</loc></sitemap>`).join('\n')
-    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${items}
-</sitemapindex>`
-    writeFileSync(join(outputDir, `sitemap-index.xml`), sitemapIndex)
-    console.log(`  ✓ sitemap-index.xml`)
-  }
-
-  // Generate localized 404 pages
-  async function write404s() {
-    for (const locale of locales) {
-      const meta = localesMeta[locale] || {}
-      
-      // Try to use a 404 template if available, otherwise use default
-      let html
-      const custom404Path = `${pagesDir}/404.njk`
-      const custom404LocalePath = `${pagesDir}/404.${locale}.njk`
-      
-      if (existsSync(custom404LocalePath) || existsSync(custom404Path)) {
-        // Use template system
-        const localeData = loadLocaleData()
-        const translator = makeTranslator(localeData, locale, defaultLocale)
-        currentTranslator = translator
-        
-        try {
-          const templateFile = existsSync(custom404LocalePath) ? '404.' + locale + '.njk' : '404.njk'
-          html = env.render('pages/' + templateFile, {
-            locale,
-            locales,
-            alternates: [locale], // Only current locale for 404
-            defaultLocale,
-            rtl: meta.rtl || ['ar','he','fa','ur'].includes(locale),
-            t: translator,
-            ...Object.fromEntries(
-              Object.entries(localeData[locale] || localeData[defaultLocale] || {})
-            ),
-            currentPage: '/404.html',
-            page: { slug: '404' },
-            isCurrentLocale: l => l === locale,
-            getLocalizedUrl: (path, targetLocale = locale) => {
-              const cleanPath = path.replace(/^\/([a-z]{2})\//,'')
-              return `/${targetLocale}/${cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath}`
-            }
-          })
-        } catch (err) {
-          console.warn(`Could not render 404 template for ${locale}, using default:`, err.message)
-          html = null
-        } finally {
-          currentTranslator = null
-        }
-      }
-      
-      // Fallback to basic 404 page
-      if (!html) {
-        html = `<!DOCTYPE html>
-<html lang="${locale}" dir="${meta.rtl ? 'rtl' : 'ltr'}">
-<head>
-  <meta charset="utf-8">
-  <title>404 - Page Not Found</title>
-</head>
-<body>
-  <h1>404 - Page Not Found</h1>
-  <p>The page you are looking for could not be found.</p>
-  <a href="/${locale}/">Go Home</a>
-</body>
-</html>`
-      }
-
-      if (isProduction) {
-        html = await minify(html, {
-          removeComments: true,
-          collapseWhitespace: true,
-          minifyCSS: true,
-          minifyJS: true
-        })
-      }
-
-      const out = `${outputDir}/${locale}/404.html`
-      if (!existsSync(dirname(out))) mkdirSync(dirname(out), { recursive: true })
-      writeFileSync(out, html)
-      console.log(`  ✓ ${locale}/404.html`)
-    }
-  }
-
-  // Rebuild specific base page for incremental builds
-  async function rebuildBase(base, localeData) {
-    const byBase = new Map()
-    const allFiles = glob.sync(`${pagesDir}/**/*.njk`)
-    
-    for (const f of allFiles) {
-      const rel = f.replace(`${pagesDir}/`, '')
-      const m = rel.match(LOCALE_RE)
-      const baseName = m ? rel.replace(LOCALE_RE, '.njk') : rel
-      if (baseName === base) {
-        const entry = byBase.get(base) || { default: null, variants: {} }
-        if (m) entry.variants[m[1]] = rel
-        else entry.default = rel
-        byBase.set(base, entry)
-      }
-    }
-    
-    const entry = byBase.get(base)
-    if (entry) {
-      for (const locale of locales) {
-        const relTemplate = entry.variants[locale] || entry.default
-        if (!relTemplate) continue
-        await renderOne({ 
-          relTemplate, 
-          baseRel: base, 
-          locale, 
-          availableLocales: Object.keys(entry.variants), 
-          localeData 
-        })
-      }
-    }
+    if (!existsSync(file)) return false;
+    const m = statSync(file).mtimeMs;
+    const prev = fileMTime.get(file);
+    fileMTime.set(file, m);
+    return prev !== m;
   }
 
   // Generate all pages for all locales
   async function generatePages() {
-    const localeData = loadLocaleData()
-    
-    console.log(`🌍 Generating pages for locales: ${locales.join(', ')}`)
-    
-    // Discover pages with co-located variants
-    const allFiles = glob.sync(`${pagesDir}/**/*.njk`)
-    const byBase = new Map() // basePath => { default: file, variants: {en:file,fr:file} }
+    const localeData = loadLocaleData(locales, dataDir);
+    const routesConfig = loadRoutesConfig();
+    const metaData = loadMetaData(dataDir);
 
+    console.log(`🌍 Generating pages for locales: ${locales.join(", ")}`);
+
+    // Discover pages with co-located variants
+    const allFiles = glob.sync(`${pagesDir}/**/*.njk`);
+    const byBase = new Map(); // basePath => { default: file, variants: {en:file,fr:file} }
+    console.log("generatePages allFiles", allFiles);
     for (const f of allFiles) {
-      const rel = f.replace(`${pagesDir}/`, '')
-      const m = rel.match(LOCALE_RE)
-      const base = m ? rel.replace(LOCALE_RE, '.njk') : rel
-      const entry = byBase.get(base) || { default: null, variants: {} }
-      if (m) entry.variants[m[1]] = rel
-      else entry.default = rel
-      byBase.set(base, entry)
+      const rel = f.replace(`${pagesDir}/`, "");
+      const m = rel.match(LOCALE_RE);
+      const base = m ? rel.replace(LOCALE_RE, ".njk") : rel;
+      const entry = byBase.get(base) || { default: null, variants: {} };
+      if (m) entry.variants[m[1]] = rel;
+      else entry.default = rel;
+      byBase.set(base, entry);
     }
+
+    // Update all components with current state
+    const assetHashes = assetProcessor.getAssetHashes();
+    pageRenderer.setAssetHashes(assetHashes);
+    notFoundGenerator.setAssetHashes(assetHashes);
 
     // Render pages
     for (const [baseRel, entry] of byBase) {
       for (const locale of locales) {
-        const relTemplate = entry.variants[locale] || entry.default // fallback
-        if (!relTemplate) continue // no default: skip
-        await renderOne({ 
-          relTemplate, 
-          baseRel, 
-          locale, 
-          availableLocales: Object.keys(entry.variants), 
-          localeData 
-        })
+        const relTemplate = entry.variants[locale] || entry.default; // fallback
+        if (!relTemplate) continue; // no default: skip
+        await pageRenderer.renderOne({
+          relTemplate,
+          baseRel,
+          locale,
+          availableLocales: Object.keys(entry.variants),
+          localeData,
+          routesConfig,
+          metaData,
+        });
       }
     }
-    
-    // Generate improved root index.html with cookie support
-    let rootIndex = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Redirect</title>
-  <script>
-    const qs = new URLSearchParams(location.search);
-    const forced = qs.get('lang');
-    const supported = ${JSON.stringify(locales)};
-    const COOKIE = 'lang=';
-    const getCookie = () => document.cookie.split('; ').find(c => c.startsWith(COOKIE))?.slice(COOKIE.length);
 
-    let lang = forced || getCookie() || (navigator.language||'').toLowerCase().slice(0,2);
-    if (!supported.includes(lang)) lang = '${defaultLocale}';
-    document.cookie = \`lang=\${lang}; path=/; max-age=\${60*60*24*365}\`;
-    location.replace('/' + lang + '/');
-  </script>
-</head>
-<body>
-  <noscript>
-    <p><a href="/${defaultLocale}/">Continue</a></p>
-  </noscript>
-</body>
-</html>`
-    
-    // Minify root index in production
-    if (isProduction) {
-      rootIndex = await minify(rootIndex, {
-        removeComments: true,
-        removeRedundantAttributes: true,
-        removeScriptTypeAttributes: true,
-        removeStyleLinkTypeAttributes: true,
-        sortClassName: true,
-        useShortDoctype: true,
-        collapseWhitespace: true,
-        conservativeCollapse: true,
-        preserveLineBreaks: false,
-        minifyCSS: true,
-        minifyJS: true
-      })
-    }
-    
-    writeFileSync(`${outputDir}/index.html`, rootIndex)
-    console.log(`  ✓ Root redirect page`)
-    
+    // Generate root redirect page
+    await rootRedirectGenerator.generateRootRedirect(routesConfig);
+
     // Generate sitemaps if enabled
     if (emitSitemaps) {
-      buildSitemaps()
+      sitemapGenerator.buildSitemaps(routesConfig);
     }
-    
+
     // Generate 404 pages if enabled
     if (emit404s) {
-      await write404s()
+      await notFoundGenerator.write404s(routesConfig);
     }
+
+    // Generate localized webmanifests
+    await webmanifestGenerator.generateWebManifests(routesConfig, localeData);
   }
 
   // Setup file watcher for development with incremental rebuilds
   function setupWatcher() {
     const watchPaths = [
+      // Nunjucks templates
       `${pagesDir}/**/*.njk`,
-      `${layoutsDir}/**/*.njk`, 
+      `${layoutsDir}/**/*.njk`,
       `${partialsDir}/**/*.njk`,
-      `${dataDir}/**/*.json`
-    ]
-    
+      // Data files
+      `${dataDir}/**/*.json`,
+      // CSS files
+      `${srcDir}/assets/css/**/*.css`,
+      // JS files
+      `${srcDir}/assets/js/**/*.js`,
+      // Asset files that might affect the build
+      `${srcDir}/assets/**/*`,
+    ];
+
     const watcher = chokidar.watch(watchPaths, {
       persistent: true,
-      ignoreInitial: true
-    })
-    
-    watcher.on('change', async (path) => {
-      if (!isStale(path)) return
-      
-      console.log(`📝 File changed: ${path}`)
-      const localeData = loadLocaleData()
-      
-      // If a page changed: rebuild that base page for all locales
-      if (path.startsWith(pagesDir)) {
-        const rel = path.replace(`${pagesDir}/`, '')
-        const base = rel.replace(LOCALE_RE, '.njk')
-        await rebuildBase(base, localeData)
-      } else {
-        // layout/partials/data: rebuild all
-        await generatePages()
+      ignoreInitial: true,
+    });
+
+    watcher.on("change", async (path) => {
+      if (!isStale(path)) return;
+
+      console.log(`📝 File changed: ${path}`);
+
+      // Determine file type and appropriate action
+      const ext = extname(path).toLowerCase();
+      const isTemplate = ext === ".njk";
+      const isData = ext === ".json" && path.startsWith(dataDir);
+      const isAsset =
+        ext === ".css" ||
+        ext === ".js" ||
+        path.startsWith(`${srcDir}/assets`) ||
+        path.startsWith("public/");
+
+      // For assets, reprocess them first
+      if (isAsset) {
+        console.log(`🎨 Reprocessing assets due to ${ext} file change...`);
+        await assetProcessor.processAssets();
       }
-      
+
+      const localeData = loadLocaleData(locales, dataDir);
+      const routesConfig = loadRoutesConfig();
+      const metaData = loadMetaData(dataDir);
+
+      // For templates and data files, handle page rebuilding
+      if (isTemplate || isData) {
+        // Discover pages with co-located variants for incremental rebuild
+        const allFiles = glob.sync(`${pagesDir}/**/*.njk`);
+        const byBase = new Map();
+
+        for (const f of allFiles) {
+          const rel = f.replace(`${pagesDir}/`, "");
+          const m = rel.match(LOCALE_RE);
+          const baseName = m ? rel.replace(LOCALE_RE, ".njk") : rel;
+          const entry = byBase.get(baseName) || { default: null, variants: {} };
+          if (m) entry.variants[m[1]] = rel;
+          else entry.default = rel;
+          byBase.set(baseName, entry);
+        }
+
+        // If a page changed: rebuild that base page for all locales
+        if (path.startsWith(pagesDir)) {
+          const rel = path.replace(`${pagesDir}/`, "");
+          const base = rel.replace(LOCALE_RE, ".njk");
+          await pageRenderer.rebuildBase(
+            base,
+            localeData,
+            routesConfig,
+            metaData,
+            byBase,
+          );
+        } else {
+          // layout/partials/data: rebuild all pages
+          await generatePages();
+        }
+      } else if (isAsset) {
+        // For assets, we need to update asset hashes and regenerate pages with new hashes
+        const assetHashes = assetProcessor.getAssetHashes();
+        pageRenderer.setAssetHashes(assetHashes);
+        notFoundGenerator.setAssetHashes(assetHashes);
+
+        // Regenerate all pages to pick up new asset hashes
+        await generatePages();
+      }
+
       // Trigger HMR if in dev mode
       if (server) {
-        server.ws.send({ type: 'full-reload' })
+        server.ws.send({ type: "full-reload" });
       }
-    })
-    
-    watcher.on('add', async (path) => {
-      console.log(`➕ File added: ${path}`)
-      await generatePages()
-    })
-    
-    return watcher
+    });
+
+    watcher.on("add", async (path) => {
+      console.log(`➕ File added: ${path}`);
+
+      // Determine file type and appropriate action
+      const ext = extname(path).toLowerCase();
+      const isAsset =
+        ext === ".css" ||
+        ext === ".js" ||
+        path.startsWith(`${srcDir}/assets`) ||
+        path.startsWith("public/");
+
+      // For assets, reprocess them first
+      if (isAsset) {
+        console.log(`🎨 Processing new asset: ${ext} file...`);
+        await assetProcessor.processAssets();
+      }
+
+      // Always regenerate pages when files are added to ensure proper integration
+      await generatePages();
+
+      // Trigger HMR if in dev mode
+      if (server) {
+        server.ws.send({ type: "full-reload" });
+      }
+    });
+
+    watcher.on("unlink", async (path) => {
+      console.log(`🗑️  File deleted: ${path}`);
+
+      // Determine file type and appropriate action
+      const ext = extname(path).toLowerCase();
+      const isAsset =
+        ext === ".css" ||
+        ext === ".js" ||
+        path.startsWith(`${srcDir}/assets`) ||
+        path.startsWith("public/");
+
+      // For assets, reprocess them to update references
+      if (isAsset) {
+        console.log(`🎨 Reprocessing assets after deletion of ${ext} file...`);
+        await assetProcessor.processAssets();
+      }
+
+      // Always regenerate pages when files are deleted to ensure cleanup
+      await generatePages();
+
+      // Trigger HMR if in dev mode
+      if (server) {
+        server.ws.send({ type: "full-reload" });
+      }
+    });
+
+    return watcher;
   }
 
   return {
-    name: 'multi-locale',
-    
+    name: "multi-locale",
+
     configResolved(config) {
-      // Detect production mode
-      isProduction = config.command === 'build'
-      
+      // Detect production mode using config.mode
+      // In Vite:
+      // - dev: command='serve', mode='development'
+      // - preview: command='serve', mode='production'
+      // - build: command='build', mode='production'
+      isProduction = config.mode === "production";
+
+      // Set output directory based on mode
+      currentOutputDir = isProduction ? outputDir : devOutputDir;
+
+      // Update all components with the correct output directory
+      assetProcessor.outputDir = currentOutputDir;
+      pageRenderer.outputDir = currentOutputDir;
+      sitemapGenerator.outputDir = currentOutputDir;
+      notFoundGenerator.outputDir = currentOutputDir;
+      webmanifestGenerator.outputDir = currentOutputDir;
+      rootRedirectGenerator.outputDir = currentOutputDir;
+
+      // Update production state in all components
+      assetProcessor.setProduction(isProduction);
+      pageRenderer.setProduction(isProduction);
+      notFoundGenerator.setProduction(isProduction);
+      rootRedirectGenerator.setProduction(isProduction);
+
+      console.log(
+        `📁 Using output directory: ${currentOutputDir} (${isProduction ? "production" : "development"})`,
+      );
+
       // Update paths based on Vite config
       if (config.root) {
         // Adjust paths to be relative to Vite root
       }
     },
-    
+
     configureServer(devServer) {
-      isServing = true
-      server = devServer
-      
-      // Generate initial pages
-      generatePages().catch(console.error)
-      
+      isServing = true;
+      server = devServer;
+
+      // Setup cleanup for development mode
+      if (!isProduction) {
+        setupCleanup();
+      }
+
+      // Generate initial pages and assets (async)
+      (async () => {
+        await assetProcessor.processAssets();
+        await generatePages();
+      })().catch(console.error);
+
       // Setup file watcher
-      const watcher = setupWatcher()
-      
+      const watcher = setupWatcher();
+
       // Cleanup on server close
-      devServer.httpServer?.on('close', () => {
-        watcher.close()
-      })
-      
-      // Custom middleware for locale routing
+      devServer.httpServer?.on("close", () => {
+        watcher.close();
+        cleanupDevDirectory();
+      });
+
+      // Add HMR middleware to inject Vite client script into HTML responses
       devServer.middlewares.use((req, res, next) => {
-        const url = req.url
-        
-        // If requesting root, serve the redirect page
-        if (url === '/' || url === '/index.html') {
-          const redirectHtml = readFileSync(`${outputDir}/index.html`, 'utf8')
-          res.setHeader('Content-Type', 'text/html')
-          res.end(redirectHtml)
-          return
+        // Store original res.end to intercept HTML responses
+        const originalEnd = res.end.bind(res);
+
+        res.end = function (chunk, encoding) {
+          // Only process HTML content in development
+          if (
+            !isProduction &&
+            res.getHeader("Content-Type")?.includes("text/html") &&
+            chunk &&
+            typeof chunk === "string"
+          ) {
+            // Inject Vite client script if not already present
+            if (!chunk.includes("/@vite/client")) {
+              chunk = chunk.replace(
+                /<head>/i,
+                '<head>\n  <script type="module" src="/@vite/client"></script>',
+              );
+            }
+          }
+
+          originalEnd(chunk, encoding);
+        };
+
+        next();
+      });
+
+      // Custom middleware for locale routing and asset serving
+      devServer.middlewares.use((req, res, next) => {
+        const url = req.url;
+
+        // Serve shared assets from /assets/ - prevent locale prefixing
+        if (url.startsWith("/assets/")) {
+          // Decode URL to handle spaces and special characters in filenames
+          const decodedUrl = decodeURIComponent(url);
+          const assetPath = join(currentOutputDir, decodedUrl);
+          if (existsSync(assetPath)) {
+            const content = readFileSync(assetPath);
+            const ext = extname(decodedUrl);
+            const mimeTypes = {
+              ".css": "text/css",
+              ".js": "text/javascript",
+              ".svg": "image/svg+xml",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+            };
+            res.setHeader("Content-Type", mimeTypes[ext] || "text/plain");
+            res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year cache
+            res.end(content);
+            return;
+          }
         }
-        
-        // If requesting a locale-specific page, serve it
-        const localeMatch = url.match(/^\/([a-z]{2})\/(.*)/)
-        if (localeMatch) {
-          const [, locale, path] = localeMatch
-          if (locales.includes(locale)) {
-            const filePath = `${outputDir}/${locale}/${path || 'index.html'}`
-            if (existsSync(filePath)) {
-              const html = readFileSync(filePath, 'utf8')
-              res.setHeader('Content-Type', 'text/html')
-              res.end(html)
-              return
+
+        // If requesting root, serve the redirect page
+        if (url === "/" || url === "/index.html") {
+          const redirectHtml = readFileSync(
+            `${currentOutputDir}/index.html`,
+            "utf8",
+          );
+          res.setHeader("Content-Type", "text/html");
+          res.end(redirectHtml);
+          return;
+        }
+
+        // Load routes configuration for URL matching
+        const routesConfig = loadRoutesConfig();
+        const routesList = routesConfig.routes || [];
+
+        // Try to match the URL to a route in any locale
+        for (const locale of locales) {
+          for (const route of routesList) {
+            // Get the actual path for this locale
+            const routePath = getRoutePath(route.key, locale, routesConfig);
+            if (!routePath) continue;
+
+            // Check if URL matches this route (with or without trailing slash)
+            const cleanRoutePath = routePath.replace(/\/$/, "");
+            const cleanUrlPath = url.replace(/\/$/, "");
+
+            if (cleanRoutePath === cleanUrlPath) {
+              // Convert route path to file path using same logic as renderOne
+              let filePath = routePath.replace(/^\//, "").replace(/\/$/, "");
+              if (!filePath) filePath = "index";
+
+              // For index routes, place them in the locale directory structure
+              if (filePath === "en" || filePath === "fr") {
+                filePath = filePath + "/index";
+              }
+
+              if (!filePath.endsWith(".html")) filePath += ".html";
+
+              const fullPath = join(currentOutputDir, filePath);
+              if (existsSync(fullPath)) {
+                const html = readFileSync(fullPath, "utf8");
+                res.setHeader("Content-Type", "text/html");
+                res.end(html);
+                return;
+              }
+            }
+
+            // Also check if URL matches route path without .html extension
+            if (!url.endsWith(".html")) {
+              const urlWithHtml = url + ".html";
+              if (cleanRoutePath === urlWithHtml.replace(/\/$/, "")) {
+                // Convert route path to file path using same logic as renderOne
+                let filePath = routePath.replace(/^\//, "").replace(/\/$/, "");
+                if (!filePath) filePath = "index";
+
+                // For index routes, place them in the locale directory structure
+                if (filePath === "en" || filePath === "fr") {
+                  filePath = filePath + "/index";
+                }
+
+                if (!filePath.endsWith(".html")) filePath += ".html";
+
+                const fullPath = join(currentOutputDir, filePath);
+                if (existsSync(fullPath)) {
+                  const html = readFileSync(fullPath, "utf8");
+                  res.setHeader("Content-Type", "text/html");
+                  res.end(html);
+                  return;
+                }
+              }
             }
           }
         }
-        
-        next()
-      })
+
+        // Legacy fallback: If requesting a locale-specific page with old structure
+        const localeMatch = url.match(/^\/([a-z]{2})\/(.*)/);
+        if (localeMatch) {
+          const [, locale, path] = localeMatch;
+          if (locales.includes(locale)) {
+            const filePath = `${currentOutputDir}/${locale}/${path || "index.html"}`;
+            if (existsSync(filePath)) {
+              const html = readFileSync(filePath, "utf8");
+              res.setHeader("Content-Type", "text/html");
+              res.end(html);
+              return;
+            }
+          }
+        }
+
+        next();
+      });
     },
-    
+
+    configurePreviewServer(previewServer) {
+      // Same middleware logic for preview mode
+      previewServer.middlewares.use((req, res, next) => {
+        const url = req.url;
+
+        // Serve shared assets from /assets/ - prevent locale prefixing
+        if (url.startsWith("/assets/")) {
+          // Decode URL to handle spaces and special characters in filenames
+          const decodedUrl = decodeURIComponent(url);
+          const assetPath = join(currentOutputDir, decodedUrl);
+          if (existsSync(assetPath)) {
+            const content = readFileSync(assetPath);
+            const ext = extname(decodedUrl);
+            const mimeTypes = {
+              ".css": "text/css",
+              ".js": "text/javascript",
+              ".svg": "image/svg+xml",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+            };
+            res.setHeader("Content-Type", mimeTypes[ext] || "text/plain");
+            res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year cache
+            res.end(content);
+            return;
+          }
+        }
+
+        // If requesting root, serve the redirect page
+        if (url === "/" || url === "/index.html") {
+          const redirectHtml = readFileSync(
+            `${currentOutputDir}/index.html`,
+            "utf8",
+          );
+          res.setHeader("Content-Type", "text/html");
+          res.end(redirectHtml);
+          return;
+        }
+
+        // Load routes configuration for URL matching
+        const routesConfig = loadRoutesConfig();
+        const routesList = routesConfig.routes || [];
+
+        // Try to match the URL to a route in any locale
+        for (const locale of locales) {
+          for (const route of routesList) {
+            // Get the actual path for this locale
+            const routePath = getRoutePath(route.key, locale, routesConfig);
+            if (!routePath) continue;
+
+            // Check if URL matches this route (with or without trailing slash)
+            const cleanRoutePath = routePath.replace(/\/$/, "");
+            const cleanUrlPath = url.replace(/\/$/, "");
+
+            if (cleanRoutePath === cleanUrlPath) {
+              // Convert route path to file path using same logic as renderOne
+              let filePath = routePath.replace(/^\//, "").replace(/\/$/, "");
+              if (!filePath) filePath = "index";
+
+              // For index routes, place them in the locale directory structure
+              if (filePath === "en" || filePath === "fr") {
+                filePath = filePath + "/index";
+              }
+
+              if (!filePath.endsWith(".html")) filePath += ".html";
+
+              const fullPath = join(currentOutputDir, filePath);
+              if (existsSync(fullPath)) {
+                const html = readFileSync(fullPath, "utf8");
+                res.setHeader("Content-Type", "text/html");
+                res.end(html);
+                return;
+              }
+            }
+
+            // Also check if URL matches route path without .html extension
+            if (!url.endsWith(".html")) {
+              const urlWithHtml = url + ".html";
+              if (cleanRoutePath === urlWithHtml.replace(/\/$/, "")) {
+                // Convert route path to file path using same logic as renderOne
+                let filePath = routePath.replace(/^\//, "").replace(/\/$/, "");
+                if (!filePath) filePath = "index";
+
+                // For index routes, place them in the locale directory structure
+                if (filePath === "en" || filePath === "fr") {
+                  filePath = filePath + "/index";
+                }
+
+                if (!filePath.endsWith(".html")) filePath += ".html";
+
+                const fullPath = join(currentOutputDir, filePath);
+                if (existsSync(fullPath)) {
+                  const html = readFileSync(fullPath, "utf8");
+                  res.setHeader("Content-Type", "text/html");
+                  res.end(html);
+                  return;
+                }
+              }
+            }
+          }
+        }
+
+        // Legacy fallback: If requesting a locale-specific page with old structure
+        const localeMatch = url.match(/^\/([a-z]{2})\/(.*)/);
+        if (localeMatch) {
+          const [, locale, path] = localeMatch;
+          if (locales.includes(locale)) {
+            const filePath = `${currentOutputDir}/${locale}/${path || "index.html"}`;
+            if (existsSync(filePath)) {
+              const html = readFileSync(filePath, "utf8");
+              res.setHeader("Content-Type", "text/html");
+              res.end(html);
+              return;
+            }
+          }
+        }
+
+        next();
+      });
+    },
+
     async buildStart() {
       if (!isServing) {
-        console.log('🏗️  Building multi-locale site...')
+        console.log("🏗️  Building multi-locale site...");
         // Ensure output directory exists and is clean
-        if (!existsSync(outputDir)) {
-          mkdirSync(outputDir, { recursive: true })
+        if (!existsSync(currentOutputDir)) {
+          mkdirSync(currentOutputDir, { recursive: true });
         }
-        await generatePages()
+        // Process assets for both dev and production
+        await assetProcessor.processAssets();
+        await generatePages();
       }
     },
-    
+
     generateBundle(options, bundle) {
       // Clear the bundle since we don't need JS files for this static site
       for (const fileName of Object.keys(bundle)) {
-        delete bundle[fileName]
+        delete bundle[fileName];
       }
-      console.log('📦 Multi-locale pages generated')
+      console.log("📦 Multi-locale pages generated");
     },
-    
+
     // Hook into the writeBundle to ensure our static files are copied to final output
     async writeBundle() {
       if (isProduction) {
-        console.log('✅ Multi-locale build complete!')
+        console.log("✅ Multi-locale build complete!");
       }
-    }
-  }
+    },
+  };
 }
 
 // Export a helper function to create the plugin with common defaults
 export function createMultiLocalePlugin(userOptions = {}) {
-  return multiLocalePlugin(userOptions)
+  return multiLocalePlugin(userOptions);
 }

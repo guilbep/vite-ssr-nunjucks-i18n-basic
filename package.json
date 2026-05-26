@@ -1,9 +1,18 @@
 {
   "name": "vite-ssr-nunjucks-i18n-basic",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "A modern, fast, and SEO-friendly multi-locale static site generator powered by Vite and Nunjucks",
-  "main": "vite.config.js",
+  "main": "./plugins/multi-locale-plugin.js",
+  "exports": {
+    ".": "./plugins/multi-locale-plugin.js",
+    "./generators/*": "./plugins/generators/*.js",
+    "./utils/*": "./plugins/utils/*.js",
+    "./templates/*": "./plugins/templates/*"
+  },
+  "files": [
+    "plugins"
+  ],
   "keywords": [
     "vite",
     "nunjucks",
@@ -41,17 +50,23 @@
     "lighthouse:quick": "./lighthouse-test.sh",
     "perf": "npm run lighthouse"
   },
+  "peerDependencies": {
+    "vite": ">=5.0.0"
+  },
   "dependencies": {
     "chokidar": "^3.6.0",
     "glob": "^11.0.3",
+    "html-minifier-terser": "^7.2.0",
     "nunjucks": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.34.3"
   },
   "devDependencies": {
     "@lhci/cli": "^0.15.1",
-    "html-minifier-terser": "^7.2.0",
-    "vite": "^5.0.0",
     "concurrently": "^9.2.0",
     "lighthouse": "^12.8.1",
+    "vite": "^5.0.0",
     "wait-on": "^8.0.4"
   }
 }
