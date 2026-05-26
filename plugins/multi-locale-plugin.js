@@ -240,6 +240,46 @@ export function multiLocalePlugin(options = {}) {
     }
   });
 
+  // Inline an asset as a data: URI — useful for embedding small images
+  // (avatars, logos) directly in the HTML so the LCP image arrives in the
+  // first network round-trip alongside the document. MIME type is inferred
+  // from the extension; SVG is URL-encoded (smaller than base64), everything
+  // else is base64.
+  const MIME_TYPES = {
+    ".webp": "image/webp",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".avif": "image/avif",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+  };
+  env.addGlobal("data_uri", (logicalPath) => {
+    const physical = manifest[logicalPath] || logicalPath;
+    const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
+    try {
+      const buf = readFileSync(fsPath);
+      const ext = extname(fsPath).toLowerCase();
+      const mime = MIME_TYPES[ext] || "application/octet-stream";
+      if (ext === ".svg") {
+        // URL-encoded SVG is typically smaller and remains human-readable.
+        const encoded = encodeURIComponent(buf.toString("utf-8"))
+          .replace(/'/g, "%27")
+          .replace(/"/g, "%22");
+        return new nunjucks.runtime.SafeString(`data:${mime};utf8,${encoded}`);
+      }
+      return new nunjucks.runtime.SafeString(
+        `data:${mime};base64,${buf.toString("base64")}`,
+      );
+    } catch (err) {
+      console.warn(`data_uri: could not read ${fsPath}: ${err.message}`);
+      return "";
+    }
+  });
+
   // Set Nunjucks environment for all components that need it
   pageRenderer.setNunjucksEnv(env);
   notFoundGenerator.setNunjucksEnv(env);

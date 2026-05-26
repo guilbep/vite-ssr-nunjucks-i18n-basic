@@ -111,6 +111,7 @@ Missing keys fall back to `defaultLocale`, then to the key string.
 | `t(key, params?)` | Translate. Supports nested keys and `{{param}}` interpolation. |
 | `asset(logicalPath)` | Resolve a logical path (e.g. `/assets/styles/main.css`) to its hashed physical path via the manifest. |
 | `inline_asset(logicalPath)` | **New in 2.1.0** — read the processed (minified, hashed) asset's contents and inline them. Great for critical CSS. |
+| `data_uri(logicalPath)` | **New in 2.2.0** — return a `data:` URI (MIME inferred from extension; SVG URL-encoded, others base64). Great for inlining the LCP avatar/logo so it arrives in the first RTT. |
 | `manifest` | The full asset manifest object. |
 | `getLocalizedUrl(path, locale)` | Localized URL for the current page in another locale (hreflang). |
 | `getRouteUrl(key, locale?)` | URL for a route by key. |
@@ -126,6 +127,14 @@ Per-render context also includes: `locale`, `locales`, `alternates`, `defaultLoc
 ```
 
 Removes the render-blocking stylesheet request entirely. CSS still lives in `src/assets/css/` as an editable source file — the plugin minifies, hashes, and inlines the processed version at template render time.
+
+### Inlining a small LCP image (example)
+
+```njk
+<img src="{{ data_uri('/assets/images/avatar.webp') }}" alt="…" width="200" height="200">
+```
+
+The LCP image then ships inside the HTML — no extra request, no extra RTT. Good for tiny images (≤ a few KB). Use sparingly — base64 inflates by ~33 % and is mostly incompressible, so it only pays off for assets small enough to keep your HTML well under the [14 KB initial-window rule](https://endtimes.dev/why-your-website-should-be-under-14kb-in-size/).
 
 ## Plugin options
 

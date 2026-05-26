@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] – 2026-05-26
+
+### Added
+- New Nunjucks global `data_uri(logicalPath)` — returns the asset as a `data:` URI. Inferred MIME type from the file extension; SVG is URL-encoded (smaller and still human-readable), everything else is base64. Lets templates inline small images (avatars, logos) so the LCP image arrives in the first network round-trip alongside the HTML:
+
+  ```njk
+  <img src="{{ data_uri('/assets/images/avatar.webp') }}" alt="…">
+  ```
+
 ## [2.1.0] – 2026-05-26
 
 ### Added
@@ -32,6 +41,7 @@ All notable changes to this project are documented in this file. Format loosely 
 - Each generator uses an isolated `nunjucks.Environment` to avoid mutating the user's global env.
 - `package.json` exposes `main`/`exports`/`files` for installable npm distribution. `vite` is a `peerDependency`; `sharp` is an `optionalDependency`.
 
+[2.2.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.2.0
 [2.1.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.1.0
 [2.0.1]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.0.1
 [2.0.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.0.0
