@@ -56,7 +56,32 @@ export class WebmanifestGenerator {
         translator("site.description") ||
         translator("meta.description") ||
         baseManifest.description ||
-        "INPLUGS CO2 Calculator";
+        "";
+
+      // Pull icons, theme/background colour, and display mode from the user's
+      // public/site.webmanifest when present so the generated per-locale
+      // manifests don't hardcode INPLUGS-specific values. Fall back to safe
+      //, generic defaults — including an empty icons array, which is valid
+      // per the spec and stops the browser from 404'ing on icons we don't
+      // actually ship.
+      const DEFAULT_ICONS = [
+        {
+          src: "/assets/images/favicon/android-chrome-192x192.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          src: "/assets/images/favicon/android-chrome-384x384.png",
+          sizes: "384x384",
+          type: "image/png",
+        },
+      ];
+      const icons = Array.isArray(baseManifest.icons)
+        ? baseManifest.icons
+        : DEFAULT_ICONS;
+      const themeColor = baseManifest.theme_color || "#ffffff";
+      const backgroundColor = baseManifest.background_color || "#ffffff";
+      const display = baseManifest.display || "standalone";
 
       // Render manifest using template
       const manifestJson = this.templateEnv.render("manifest.json.njk", {
@@ -68,6 +93,10 @@ export class WebmanifestGenerator {
         scope: homeRoute,
         dir:
           meta.rtl || ["ar", "he", "fa", "ur"].includes(locale) ? "rtl" : "ltr",
+        themeColor,
+        backgroundColor,
+        display,
+        icons,
       });
 
       // Determine output path based on locale directory structure

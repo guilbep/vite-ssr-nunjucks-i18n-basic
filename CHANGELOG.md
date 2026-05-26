@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] – 2026-05-26
+
+### Changed
+- The webmanifest generator now honours `icons`, `theme_color`, `background_color`, and `display` from the consumer's `public/site.webmanifest` (previously these were hardcoded in the bundled template). Falls back to the prior defaults when `public/site.webmanifest` is absent or doesn't declare a field, so existing setups keep working without changes.
+- `dir` (text direction) is now emitted in the generated webmanifest, derived from `localesMeta[locale].rtl` like elsewhere in the plugin.
+
+### Fixed
+- Removed the hardcoded `"INPLUGS CO2 Calculator"` description fallback — defaults to an empty string when nothing else resolves. Generic plugin consumers should never have seen INPLUGS in their output, but it's worth being explicit.
+
 ## [2.2.0] – 2026-05-26
 
 ### Added
@@ -41,6 +50,7 @@ All notable changes to this project are documented in this file. Format loosely 
 - Each generator uses an isolated `nunjucks.Environment` to avoid mutating the user's global env.
 - `package.json` exposes `main`/`exports`/`files` for installable npm distribution. `vite` is a `peerDependency`; `sharp` is an `optionalDependency`.
 
+[2.3.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.3.0
 [2.2.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.2.0
 [2.1.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.1.0
 [2.0.1]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.0.1
