@@ -74,14 +74,18 @@ export class NotFoundGenerator {
         });
       }
 
-      // Write 404 to the locale-specific directory structure from routes
+      // Write 404 to the locale-specific directory structure from routes.
+      // Use the first non-empty segment of the landing_page path (matches
+      // webmanifest-generator). dirname("en/") returns "." which would
+      // collapse all locales into dist/404.html — pathParts[0] is robust.
       const routes = routesConfig.routes || [];
-      const indexRoute = routes.find((r) => r.key === "landing_page"); // Changed from 'index' to 'landing_page'
+      const indexRoute = routes.find((r) => r.key === "landing_page");
       let localeDir = locale;
       if (indexRoute) {
         const indexPath = getRoutePath("landing_page", locale, routesConfig);
         if (indexPath) {
-          localeDir = dirname(indexPath.replace(/^\//, "")) || locale;
+          const pathParts = indexPath.split("/").filter((p) => p);
+          localeDir = pathParts[0] || locale;
         }
       }
 
