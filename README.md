@@ -155,6 +155,7 @@ All options have sensible defaults:
 | `localesMeta` | `{}` | Per-locale `{ name, rtl }`. |
 | `emitSitemaps` | `true` | |
 | `emit404s` | `true` | |
+| `emitWebmanifest` | `true` | Set to `false` to skip per-locale `site.webmanifest` generation. |
 | `linkRewrite` | `"safety-net"` | `"off"` disables. |
 | `copyPublic` | `true` | |
 

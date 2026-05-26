@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] – 2026-05-26
+
+### Added
+- New plugin option `emitWebmanifest` (default `true`). Set to `false` to skip generating per-locale `site.webmanifest` files. Useful for non-PWA sites where the manifest just adds a request to the critical path.
+
 ## [2.3.0] – 2026-05-26
 
 ### Changed
@@ -50,6 +55,7 @@ All notable changes to this project are documented in this file. Format loosely 
 - Each generator uses an isolated `nunjucks.Environment` to avoid mutating the user's global env.
 - `package.json` exposes `main`/`exports`/`files` for installable npm distribution. `vite` is a `peerDependency`; `sharp` is an `optionalDependency`.
 
+[2.4.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.4.0
 [2.3.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.3.0
 [2.2.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.2.0
 [2.1.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.1.0

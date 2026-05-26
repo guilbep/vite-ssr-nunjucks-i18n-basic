@@ -66,6 +66,7 @@ export function multiLocalePlugin(options = {}) {
     localesMeta = {},
     emitSitemaps = true,
     emit404s = true,
+    emitWebmanifest = true,
     linkRewrite = "safety-net",
     copyPublic = true, // Option to disable public directory copying
   } = options;
@@ -350,8 +351,10 @@ export function multiLocalePlugin(options = {}) {
       await notFoundGenerator.write404s(routesConfig);
     }
 
-    // Generate localized webmanifests
-    await webmanifestGenerator.generateWebManifests(routesConfig, localeData);
+    // Generate localized webmanifests if enabled
+    if (emitWebmanifest) {
+      await webmanifestGenerator.generateWebManifests(routesConfig, localeData);
+    }
   }
 
   // Setup file watcher for development with incremental rebuilds
