@@ -221,6 +221,25 @@ export function multiLocalePlugin(options = {}) {
   console.log("manifest", manifest);
   env.addGlobal("asset", (logicalPath) => manifest[logicalPath] || logicalPath);
   env.addGlobal("manifest", manifest);
+
+  // Inline the processed (minified, hashed) contents of an asset so a
+  // template can drop it straight into the document — useful for critical
+  // CSS, tiny JS shims, etc. Resolves the logical path through the manifest
+  // and reads the file from the current output directory, so it works in
+  // both dev and production.
+  env.addGlobal("inline_asset", (logicalPath) => {
+    const physical = manifest[logicalPath] || logicalPath;
+    const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
+    try {
+      return new nunjucks.runtime.SafeString(readFileSync(fsPath, "utf8"));
+    } catch (err) {
+      console.warn(
+        `inline_asset: could not read ${fsPath}: ${err.message}`,
+      );
+      return "";
+    }
+  });
+
   // Set Nunjucks environment for all components that need it
   pageRenderer.setNunjucksEnv(env);
   notFoundGenerator.setNunjucksEnv(env);
