@@ -2,14 +2,13 @@ name: Release
 
 # Push a tag like `v2.1.0` and this workflow will:
 #   1. Verify the tag matches the version in package.json
-#   2. Publish the package to npm (with provenance)
+#   2. Publish the package to npm (provenance + OIDC trusted publishing)
 #   3. Create a GitHub Release with the matching CHANGELOG section
 #
-# Prerequisites:
-#   - Repository secret `NPM_TOKEN` set to an npm automation token
-#     (npmjs.com → Access Tokens → Automation).
-#   - `id-token: write` permission is enabled (configured below) so npm
-#     can attach build provenance.
+# Auth: this repo is registered as a Trusted Publisher on npm for this
+# package, so no NPM_TOKEN secret is needed. The npm CLI exchanges the
+# workflow's OIDC token for a short-lived publish credential. Requires
+# `id-token: write` permission (configured below).
 
 on:
   push:
@@ -64,10 +63,8 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC trusted publishing)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
