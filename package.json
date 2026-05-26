@@ -11,7 +11,8 @@
     "./templates/*": "./plugins/templates/*"
   },
   "files": [
-    "plugins"
+    "plugins",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "vite",
