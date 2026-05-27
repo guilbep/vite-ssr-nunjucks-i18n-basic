@@ -2,7 +2,7 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { minify } from "html-minifier-terser";
-import nunjucks from "nunjucks";
+import { Eta } from "eta";
 import {
   getRoutePath,
   loadLocaleData,
@@ -19,22 +19,29 @@ export class NotFoundGenerator {
     this.locales = options.locales || ["en", "fr"];
     this.defaultLocale = options.defaultLocale || "en";
     this.localesMeta = options.localesMeta || {};
-    this.env = options.env; // Nunjucks environment for custom templates
+    this.userEta = options.eta; // User-site Eta for custom 404 overrides
+    this.globals = options.globals || {}; // Template helpers for custom 404 renders
     this.isProduction = false;
 
-    // Isolated env scoped to the package's own templates dir.
-    this.templateEnv = new nunjucks.Environment(
-      new nunjucks.FileSystemLoader(TEMPLATES_DIR, { watch: false }),
-      { autoescape: true },
-    );
+    // Isolated Eta for the built-in default 404 template.
+    this.eta = new Eta({
+      views: TEMPLATES_DIR,
+      useWith: true,
+      autoEscape: true,
+      cache: true,
+    });
   }
 
   setProduction(isProduction) {
     this.isProduction = isProduction;
   }
 
-  setNunjucksEnv(env) {
-    this.env = env;
+  setEta(eta) {
+    this.userEta = eta;
+  }
+
+  setGlobals(globals) {
+    this.globals = globals;
   }
 
   setAssetHashes(assetHashes) {
@@ -48,8 +55,8 @@ export class NotFoundGenerator {
 
       // Try to use a 404 template if available, otherwise use default
       let html;
-      const custom404Path = `${this.pagesDir}/404.njk`;
-      const custom404LocalePath = `${this.pagesDir}/404.${locale}.njk`;
+      const custom404Path = `${this.pagesDir}/404.eta`;
+      const custom404LocalePath = `${this.pagesDir}/404.${locale}.eta`;
 
       if (existsSync(custom404LocalePath) || existsSync(custom404Path)) {
         html = await this.renderCustom404(
@@ -103,10 +110,8 @@ export class NotFoundGenerator {
     custom404LocalePath,
     routesConfig,
   ) {
-    if (!this.env) {
-      console.warn(
-        "Nunjucks environment not available for custom 404 rendering",
-      );
+    if (!this.userEta) {
+      console.warn("Eta environment not available for custom 404 rendering");
       return null;
     }
 
@@ -115,9 +120,10 @@ export class NotFoundGenerator {
       const translator = makeTranslator(localeData, locale, this.defaultLocale);
 
       const templateFile = existsSync(custom404LocalePath)
-        ? "404." + locale + ".njk"
-        : "404.njk";
-      const html = this.env.render("pages/" + templateFile, {
+        ? "404." + locale + ".eta"
+        : "404.eta";
+      const html = this.userEta.render("pages/" + templateFile, {
+        ...this.globals,
         locale,
         locales: this.locales,
         alternates: [locale], // Only current locale for 404
@@ -175,7 +181,7 @@ export class NotFoundGenerator {
     const canonicalUrl =
       getRoutePath("404", locale, routesConfig) || `/${locale}/404`;
 
-    return this.templateEnv.render("404.html.njk", {
+    return this.eta.render("404.html.eta", {
       locale,
       locales: this.locales,
       defaultLocale: this.defaultLocale,

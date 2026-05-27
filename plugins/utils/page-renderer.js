@@ -21,30 +21,27 @@ export class PageRenderer {
     this.defaultLocale = options.defaultLocale || "en";
     this.localesMeta = options.localesMeta || {};
     this.linkRewrite = options.linkRewrite || "safety-net";
-    this.env = options.env; // Nunjucks environment
+    this.eta = options.eta; // Eta instance
+    this.globals = options.globals || {}; // Template helpers spread into every render
     this.isProduction = false;
     this.assetHashes = {};
     this.fileMTime = new Map();
-    this.currentTranslator = null;
   }
 
   setProduction(isProduction) {
     this.isProduction = isProduction;
   }
 
-  setNunjucksEnv(env) {
-    this.env = env;
+  setEta(eta) {
+    this.eta = eta;
+  }
+
+  setGlobals(globals) {
+    this.globals = globals;
   }
 
   setAssetHashes(assetHashes) {
     this.assetHashes = assetHashes;
-  }
-
-  setCurrentTranslator(translator) {
-    this.currentTranslator = translator;
-    if (this.env) {
-      this.env.addGlobal("t", translator);
-    }
   }
 
   // Check if file is stale for incremental rebuilds
@@ -107,8 +104,6 @@ export class PageRenderer {
     // Create translator for this locale
     const translator = makeTranslator(localeData, locale, this.defaultLocale);
 
-    // Set the global translator for this render
-    this.setCurrentTranslator(translator);
     try {
       // Get navigation items from routes config for current locale
       const navItemsMap = {};
@@ -132,7 +127,8 @@ export class PageRenderer {
           return result;
         });
 
-      let html = this.env.render(templateName, {
+      let html = this.eta.render(templateName, {
+        ...this.globals, // inline_asset, data_uri, asset, manifest, url, absoluteUrl, ...
         locale,
         locales: this.locales,
         alternates, // for hreflang UI
@@ -220,9 +216,6 @@ export class PageRenderer {
       console.log(`  ✓ ${routePath} → ${filePath}`);
     } catch (err) {
       console.error(`  ✗ Error rendering ${routePath}:`, err.message);
-    } finally {
-      // Reset global translator
-      this.setCurrentTranslator(null);
     }
   }
 

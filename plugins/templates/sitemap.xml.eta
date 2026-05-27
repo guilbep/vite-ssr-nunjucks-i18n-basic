@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+<% for (const route of routes) { %>
+    <url>
+    <loc><%= siteUrl %><%= route.path %></loc>
+    <lastmod><%= lastmod %></lastmod>
+    <changefreq>weekly</changefreq>
+    <priority><%= route.priority || 0.8 %></priority>
+    <% if (alternateRoutes[route.baseRoute]) { %>
+        <% for (const [altLocale, altRoute] of Object.entries(alternateRoutes[route.baseRoute])) { %>
+            <xhtml:link rel="alternate" hreflang="<%= altLocale %>" href="<%= siteUrl %><%= altRoute.path %>" />
+        <% } %>
+    <% } %>
+    </url>
+<% } %>
+</urlset>

@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] – 2026-05-27
+
+### Changed (breaking)
+- **Package renamed**: `vite-ssr-nunjucks-i18n-basic` → `vite-ssr-i18n-basic`. The old name remains on npm at 2.x for legacy installs; new releases ship under the new name.
+- **Templating engine swapped from Nunjucks to [Eta](https://eta.js.org/)** (Nunjucks last release April 2023; Eta last release April 2026). All site templates must be rewritten:
+  - File extension: `.njk` → `.eta`
+  - `{% extends "main.njk" %}` + `{% block content %}…{% endblock %}` → `<% layout('/layouts/main') %>…` (the layout uses `<%~ body %>` to inject the child)
+  - `{% include "x" %}` → `<%~ include('/partials/x') %>`
+  - `{% if … %} … {% endif %}` / `{% for x in xs %} … {% endfor %}` → native JS inside `<% … %>`
+  - `{{ var }}` (escaped) → `<%= var %>`
+  - `{{ var | safe }}` (raw) → `<%~ var %>`
+  - `{{ list | dump | safe }}` → `<%~ JSON.stringify(list) %>`
+  - `{{ var | upper }}` → `<%= var.toUpperCase() %>`
+- Filters registered via `env.addFilter(...)` are gone. The plugin still exposes `url`, `absoluteUrl`, `eq`, `locale_url` as plain helper functions on every render — call them as `<%= absoluteUrl(x, base) %>` instead of piping `{{ x | absoluteUrl(base) }}`.
+- `inline_asset` and `data_uri` no longer return Nunjucks `SafeString`. Use the raw output prefix at the template level: `<%~ inline_asset('/x.css') %>`.
+
+### Internal
+- `nunjucks` dependency removed; `eta@^4.6.0` added (smaller dep tree, zero new vulnerabilities).
+- Eta is instantiated with `useWith: true`, `autoEscape: true`, `cache: false`, `views: srcDir`. The single `views` root lets templates reference partials/layouts/pages by absolute path (`/layouts/main`, `/partials/head`, `/pages/foo`).
+- Generators (sitemap, notfound, webmanifest, root-redirect) now use isolated Eta instances rooted at the plugin's bundled `plugins/templates/` directory.
+- `PageRenderer.setNunjucksEnv` → `PageRenderer.setEta`; new `PageRenderer.setGlobals` accepts the helpers object that gets spread into every render's data. Same change on `NotFoundGenerator`.
+
+### Migration
+Verified on a real consumer site: rendered HTML output is byte-identical to the previous Nunjucks build for the same templates (after the mechanical syntax conversion above).
+
 ## [2.4.0] – 2026-05-26
 
 ### Added
@@ -55,6 +80,7 @@ All notable changes to this project are documented in this file. Format loosely 
 - Each generator uses an isolated `nunjucks.Environment` to avoid mutating the user's global env.
 - `package.json` exposes `main`/`exports`/`files` for installable npm distribution. `vite` is a `peerDependency`; `sharp` is an `optionalDependency`.
 
+[3.0.0]: https://github.com/guilbep/vite-ssr-i18n-basic/releases/tag/v3.0.0
 [2.4.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.4.0
 [2.3.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.3.0
 [2.2.0]: https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/releases/tag/v2.2.0

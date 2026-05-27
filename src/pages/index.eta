@@ -1,0 +1,8 @@
+<% layout('/layouts/main') %>
+<h1><%= t('homepage.title') %></h1>
+<h2><%= t('homepage.subtitle') %></h2>
+<p><%= t('homepage.greeting', { name: 'User' }) %></p>
+
+<nav>
+  <a href="/<%= locale %>/about.html"><%= t('navigation.about') || 'About' %></a>
+</nav>
