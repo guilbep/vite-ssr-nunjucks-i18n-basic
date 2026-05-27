@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import nunjucks from "nunjucks";
+import { Eta } from "eta";
 import { getRoutePath, makeTranslator } from "../utils/locale-utils.js";
 
 const TEMPLATES_DIR = fileURLToPath(new URL("../templates", import.meta.url));
@@ -13,11 +13,14 @@ export class WebmanifestGenerator {
     this.defaultLocale = options.defaultLocale || "en";
     this.localesMeta = options.localesMeta || {};
 
-    // Isolated env scoped to the package's own templates dir.
-    this.templateEnv = new nunjucks.Environment(
-      new nunjucks.FileSystemLoader(TEMPLATES_DIR, { watch: false }),
-      { autoescape: false }, // raw JSON output
-    );
+    // Isolated Eta scoped to the package's own templates dir.
+    // autoEscape off for raw JSON output.
+    this.eta = new Eta({
+      views: TEMPLATES_DIR,
+      useWith: true,
+      autoEscape: false,
+      cache: true,
+    });
   }
 
   // Generate localized site.webmanifest files
@@ -84,7 +87,7 @@ export class WebmanifestGenerator {
       const display = baseManifest.display || "standalone";
 
       // Render manifest using template
-      const manifestJson = this.templateEnv.render("manifest.json.njk", {
+      const manifestJson = this.eta.render("manifest.json.eta", {
         name: localizedName,
         shortName: localizedShortName,
         description: localizedDescription,

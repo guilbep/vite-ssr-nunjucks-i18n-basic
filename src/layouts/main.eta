@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>" dir="<%= rtl ? 'rtl' : 'ltr' %>">
+<head>
+  <meta charset="utf-8">
+  <title><%= t('title') || 'My Site' %></title>
+  <% for (const l of alternates) { %>
+  <link rel="alternate" hreflang="<%= l %>" href="<%= getLocalizedUrl(currentPage, l) %>">
+  <% } %>
+  <link rel="alternate" hreflang="x-default" href="<%= getLocalizedUrl(currentPage, defaultLocale) %>">
+</head>
+<body>
+  <%~ include('/partials/header') %>
+  <main>
+    <%~ body %>
+  </main>
+  <%~ include('/partials/footer') %>
+</body>
+</html>

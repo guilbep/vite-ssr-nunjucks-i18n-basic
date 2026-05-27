@@ -2,7 +2,7 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { minify } from "html-minifier-terser";
-import nunjucks from "nunjucks";
+import { Eta } from "eta";
 import { getRoutePath } from "../utils/locale-utils.js";
 
 const TEMPLATES_DIR = fileURLToPath(new URL("../templates", import.meta.url));
@@ -14,11 +14,13 @@ export class RootRedirectGenerator {
     this.defaultLocale = options.defaultLocale || "en";
     this.isProduction = false;
 
-    // Isolated env scoped to the package's own templates dir.
-    this.templateEnv = new nunjucks.Environment(
-      new nunjucks.FileSystemLoader(TEMPLATES_DIR, { watch: false }),
-      { autoescape: true },
-    );
+    // Isolated Eta scoped to the package's own templates dir.
+    this.eta = new Eta({
+      views: TEMPLATES_DIR,
+      useWith: true,
+      autoEscape: true,
+      cache: true,
+    });
   }
 
   setProduction(isProduction) {
@@ -42,7 +44,7 @@ export class RootRedirectGenerator {
         .filter((route) => route.path !== null);
     }
 
-    let rootIndex = this.templateEnv.render("root-redirect.html.njk", {
+    let rootIndex = this.eta.render("root-redirect.html.eta", {
       locales: this.locales,
       defaultLocale: this.defaultLocale,
       title: "INPLUGS - Language Selection",

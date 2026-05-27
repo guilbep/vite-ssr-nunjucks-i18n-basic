@@ -1,0 +1,11 @@
+<% layout('/layouts/main') %>
+<h1><%= t('about.title') %></h1>
+<p><%= t('about.description') %></p>
+
+<nav>
+  <% for (const loc of alternates) { %>
+    <a href="<%= getLocalizedUrl('/about.html', loc) %>"<% if (locale === loc) { %> class="active"<% } %>>
+      <%= loc.toUpperCase() %>
+    </a>
+  <% } %>
+</nav>

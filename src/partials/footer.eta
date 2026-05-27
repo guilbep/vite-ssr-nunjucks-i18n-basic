@@ -1,0 +1,3 @@
+<footer>
+  <p>&copy; 2025 <%= t('siteName') || 'My Website' %>. <%= t('footer.rights') || 'All rights reserved.' %></p>
+</footer>

@@ -1,0 +1,13 @@
+{
+  "name": "<%= name %>",
+  "short_name": "<%= shortName %>",
+  "description": "<%= description %>",
+  "start_url": "<%= startUrl %>",
+  "display": "<%= display %>",
+  "background_color": "<%= backgroundColor %>",
+  "theme_color": "<%= themeColor %>",
+  "lang": "<%= locale %>",
+  "dir": "<%= dir %>",
+  "scope": "<%= scope %>",
+  "icons": <%~ JSON.stringify(icons) %>
+}

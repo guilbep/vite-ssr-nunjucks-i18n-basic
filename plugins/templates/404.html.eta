@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><%= title %></title>
+        <meta name="description" content="<%= description %>">
+        <link rel="canonical" href="<%= canonicalUrl %>">
+        <% for (const [altLocale, altUrl] of Object.entries(alternateUrls)) { %>
+            <link rel="alternate" hreflang="<%= altLocale %>" href="<%= altUrl %>">
+        <% } %>
+        <% if (assetHashes) { %>
+            <link rel="stylesheet" href="/assets/styles/00-reset<%= assetHashes.css || '' %>.css">
+            <link rel="stylesheet" href="/assets/styles/01-tokens<%= assetHashes.css || '' %>.css">
+            <link rel="stylesheet" href="/assets/styles/02-layout<%= assetHashes.css || '' %>.css">
+            <link rel="stylesheet" href="/assets/styles/03-utilities<%= assetHashes.css || '' %>.css">
+            <link rel="stylesheet" href="/assets/styles/04-components<%= assetHashes.css || '' %>.css">
+        <% } else { %>
+            <link rel="stylesheet" href="/assets/styles/00-reset.css">
+            <link rel="stylesheet" href="/assets/styles/01-tokens.css">
+            <link rel="stylesheet" href="/assets/styles/02-layout.css">
+            <link rel="stylesheet" href="/assets/styles/03-utilities.css">
+            <link rel="stylesheet" href="/assets/styles/04-components.css">
+        <% } %>
+        <script>
+    const supportedLocales = <%~ JSON.stringify(locales) %>;
+    const defaultLocale = '<%= defaultLocale %>';
+    const userLang = (navigator.language || navigator.userLanguage).toLowerCase();
+    const browserLocale = userLang.split('-')[0];
+
+    const targetLocale = supportedLocales.includes(browserLocale) ? browserLocale : defaultLocale;
+    const targetUrl = '/<%= errorCode %>' === '/404'
+      ? `/${targetLocale}/404`
+      : `/${targetLocale}`;
+
+    if (window.location.pathname !== targetUrl) {
+      window.location.replace(targetUrl);
+    }
+        </script>
+    </head>
+    <body>
+        <main>
+            <h1><%= heading %></h1>
+            <p><%= message %></p>
+            <nav>
+                <ul>
+                    <% for (const [altLocale, altUrl] of Object.entries(alternateUrls)) { %>
+                        <li>
+                            <a href="<%= altUrl %>"><%= altLocale.toUpperCase() %></a>
+                        </li>
+                    <% } %>
+                </ul>
+            </nav>
+        </main>
+    </body>
+</html>

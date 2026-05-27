@@ -2,7 +2,7 @@
   "name": "vite-ssr-nunjucks-i18n-basic",
   "version": "2.4.0",
   "type": "module",
-  "description": "A modern, fast, and SEO-friendly multi-locale static site generator powered by Vite and Nunjucks",
+  "description": "A modern, fast, and SEO-friendly multi-locale static site generator powered by Vite and Eta",
   "main": "./plugins/multi-locale-plugin.js",
   "exports": {
     ".": "./plugins/multi-locale-plugin.js",
@@ -16,7 +16,7 @@
   ],
   "keywords": [
     "vite",
-    "nunjucks",
+    "eta",
     "i18n",
     "internationalization",
     "multi-locale",
@@ -56,9 +56,9 @@
   },
   "dependencies": {
     "chokidar": "^3.6.0",
+    "eta": "^4.6.0",
     "glob": "^11.0.3",
-    "html-minifier-terser": "^7.2.0",
-    "nunjucks": "^3.2.4"
+    "html-minifier-terser": "^7.2.0"
   },
   "optionalDependencies": {
     "sharp": "^0.34.3"

@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { createHash } from "crypto";
 
 // Locale regex for co-located variants
-export const LOCALE_RE = /\.([a-z]{2})\.njk$/;
+export const LOCALE_RE = /\.([a-z]{2})\.eta$/;
 
 // Helper function to get route path for a page key and locale
 export function getRoutePath(pageKey, locale, routesConfig) {
@@ -26,7 +26,7 @@ export function getRoutePath(pageKey, locale, routesConfig) {
 // Helper function to get page key from filename
 export function getPageKey(filename) {
   // Remove extension and locale suffix
-  const base = filename.replace(/\.njk$/, "").replace(/\.[a-z]{2}$/, "");
+  const base = filename.replace(/\.eta$/, "").replace(/\.[a-z]{2}$/, "");
   return base;
 }
 

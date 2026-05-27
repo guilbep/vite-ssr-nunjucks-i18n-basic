@@ -33,7 +33,7 @@ import {
   rmSync,
 } from "fs";
 import { glob } from "glob";
-import nunjucks from "nunjucks";
+import { Eta } from "eta";
 import chokidar from "chokidar";
 
 // Import refactored modules
@@ -170,82 +170,26 @@ export function multiLocalePlugin(options = {}) {
     process.on("exit", cleanupDevDirectory); // Process exit
   }
 
-  // Configure Nunjucks
-  const env = nunjucks.configure([srcDir, layoutsDir, partialsDir], {
-    autoescape: true,
-    watch: false, // We handle watching ourselves
-    noCache: true, // Disable template caching for development
+  // Configure Eta. Single `views` root (srcDir) so templates can reference
+  // partials/layouts/pages with absolute paths like `/partials/head`,
+  // `/layouts/main`. autoEscape on by default; templates use `<%~` to
+  // explicitly opt into raw (unescaped) output. cache off so the watcher
+  // doesn't need to invalidate per-file — the render budget is small.
+  const eta = new Eta({
+    views: srcDir,
+    useWith: true,
+    autoEscape: true,
+    cache: false,
   });
 
-  // Add Nunjucks globals and filters
-  env.addFilter(
-    "locale_url",
-    (p, l) => `/${l}${p.startsWith("/") ? "" : "/"}${p}`,
-  );
-  env.addFilter("eq", (a, b) => a === b);
-
-  // Add Eleventy-like filters for compatibility
-  env.addFilter("url", (p) => {
-    // Simple URL filter - handles asset paths and regular paths
-    if (!p) return "/";
-
-    // If it's already an absolute URL or starts with /, return as-is
-    if (p.startsWith("http") || p.startsWith("/")) return p;
-
-    // For relative paths, prepend with /
-    return "/" + p;
-  });
-
-  env.addFilter("absoluteUrl", (path, baseUrl) => {
-    // Create absolute URL by combining path with base URL
-    if (!path) return baseUrl || "";
-    if (!baseUrl) return path;
-
-    // If path is already absolute, return as-is
-    if (path.startsWith("http")) return path;
-
-    // Ensure baseUrl doesn't end with slash and path starts with slash
-    const cleanBase = baseUrl.replace(/\/$/, "");
-    const cleanPath = path.startsWith("/") ? path : "/" + path;
-
-    return cleanBase + cleanPath;
-  });
-
-  // Global translator - will be set per render
-  env.addGlobal("t", function (key, params) {
-    return currentTranslator ? currentTranslator(key, params) : key;
-  });
-
-  // If not found in manifest, fall back to the logical path
-  //
+  // Helpers exposed to every template render. With useWith: true, these are
+  // available as bare identifiers inside templates (e.g. `<%= t('foo') %>`,
+  // `<%~ inline_asset('/x.css') %>`). Helpers that need plugin state
+  // (manifest, currentOutputDir) close over it here; helpers that need
+  // per-render state (t) are added on top of these in page-renderer.
   const manifest = assetProcessor.getManifest();
   console.log("manifest", manifest);
-  env.addGlobal("asset", (logicalPath) => manifest[logicalPath] || logicalPath);
-  env.addGlobal("manifest", manifest);
 
-  // Inline the processed (minified, hashed) contents of an asset so a
-  // template can drop it straight into the document — useful for critical
-  // CSS, tiny JS shims, etc. Resolves the logical path through the manifest
-  // and reads the file from the current output directory, so it works in
-  // both dev and production.
-  env.addGlobal("inline_asset", (logicalPath) => {
-    const physical = manifest[logicalPath] || logicalPath;
-    const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
-    try {
-      return new nunjucks.runtime.SafeString(readFileSync(fsPath, "utf8"));
-    } catch (err) {
-      console.warn(
-        `inline_asset: could not read ${fsPath}: ${err.message}`,
-      );
-      return "";
-    }
-  });
-
-  // Inline an asset as a data: URI — useful for embedding small images
-  // (avatars, logos) directly in the HTML so the LCP image arrives in the
-  // first network round-trip alongside the document. MIME type is inferred
-  // from the extension; SVG is URL-encoded (smaller than base64), everything
-  // else is base64.
   const MIME_TYPES = {
     ".webp": "image/webp",
     ".png": "image/png",
@@ -258,32 +202,72 @@ export function multiLocalePlugin(options = {}) {
     ".woff": "font/woff",
     ".woff2": "font/woff2",
   };
-  env.addGlobal("data_uri", (logicalPath) => {
-    const physical = manifest[logicalPath] || logicalPath;
-    const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
-    try {
-      const buf = readFileSync(fsPath);
-      const ext = extname(fsPath).toLowerCase();
-      const mime = MIME_TYPES[ext] || "application/octet-stream";
-      if (ext === ".svg") {
-        // URL-encoded SVG is typically smaller and remains human-readable.
-        const encoded = encodeURIComponent(buf.toString("utf-8"))
-          .replace(/'/g, "%27")
-          .replace(/"/g, "%22");
-        return new nunjucks.runtime.SafeString(`data:${mime};utf8,${encoded}`);
-      }
-      return new nunjucks.runtime.SafeString(
-        `data:${mime};base64,${buf.toString("base64")}`,
-      );
-    } catch (err) {
-      console.warn(`data_uri: could not read ${fsPath}: ${err.message}`);
-      return "";
-    }
-  });
 
-  // Set Nunjucks environment for all components that need it
-  pageRenderer.setNunjucksEnv(env);
-  notFoundGenerator.setNunjucksEnv(env);
+  const globals = {
+    asset: (logicalPath) => manifest[logicalPath] || logicalPath,
+    manifest,
+
+    // Inline a processed (minified, hashed) asset directly into the document
+    // — useful for critical CSS, tiny JS shims. Use with `<%~` in templates.
+    inline_asset: (logicalPath) => {
+      const physical = manifest[logicalPath] || logicalPath;
+      const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
+      try {
+        return readFileSync(fsPath, "utf8");
+      } catch (err) {
+        console.warn(`inline_asset: could not read ${fsPath}: ${err.message}`);
+        return "";
+      }
+    },
+
+    // Inline an asset as a data: URI — embeds small images so the LCP
+    // arrives in the first network round-trip alongside the document. SVG
+    // is URL-encoded (smaller than base64), everything else is base64.
+    // Use with `<%~` in templates.
+    data_uri: (logicalPath) => {
+      const physical = manifest[logicalPath] || logicalPath;
+      const fsPath = join(currentOutputDir, physical.replace(/^\//, ""));
+      try {
+        const buf = readFileSync(fsPath);
+        const ext = extname(fsPath).toLowerCase();
+        const mime = MIME_TYPES[ext] || "application/octet-stream";
+        if (ext === ".svg") {
+          const encoded = encodeURIComponent(buf.toString("utf-8"))
+            .replace(/'/g, "%27")
+            .replace(/"/g, "%22");
+          return `data:${mime};utf8,${encoded}`;
+        }
+        return `data:${mime};base64,${buf.toString("base64")}`;
+      } catch (err) {
+        console.warn(`data_uri: could not read ${fsPath}: ${err.message}`);
+        return "";
+      }
+    },
+
+    // Eleventy-style URL helpers — now plain functions instead of filters,
+    // called as `<%= url('foo') %>`, `<%= absoluteUrl(currentPage, base) %>`.
+    locale_url: (p, l) => `/${l}${p.startsWith("/") ? "" : "/"}${p}`,
+    eq: (a, b) => a === b,
+    url: (p) => {
+      if (!p) return "/";
+      if (p.startsWith("http") || p.startsWith("/")) return p;
+      return "/" + p;
+    },
+    absoluteUrl: (path, baseUrl) => {
+      if (!path) return baseUrl || "";
+      if (!baseUrl) return path;
+      if (path.startsWith("http")) return path;
+      const cleanBase = baseUrl.replace(/\/$/, "");
+      const cleanPath = path.startsWith("/") ? path : "/" + path;
+      return cleanBase + cleanPath;
+    },
+  };
+
+  // Hand the Eta instance + globals to components that render templates.
+  pageRenderer.setEta(eta);
+  pageRenderer.setGlobals(globals);
+  notFoundGenerator.setEta(eta);
+  notFoundGenerator.setGlobals(globals);
 
   // Check if file is stale for incremental rebuilds
   function isStale(file) {
@@ -303,13 +287,13 @@ export function multiLocalePlugin(options = {}) {
     console.log(`🌍 Generating pages for locales: ${locales.join(", ")}`);
 
     // Discover pages with co-located variants
-    const allFiles = glob.sync(`${pagesDir}/**/*.njk`);
+    const allFiles = glob.sync(`${pagesDir}/**/*.eta`);
     const byBase = new Map(); // basePath => { default: file, variants: {en:file,fr:file} }
     console.log("generatePages allFiles", allFiles);
     for (const f of allFiles) {
       const rel = f.replace(`${pagesDir}/`, "");
       const m = rel.match(LOCALE_RE);
-      const base = m ? rel.replace(LOCALE_RE, ".njk") : rel;
+      const base = m ? rel.replace(LOCALE_RE, ".eta") : rel;
       const entry = byBase.get(base) || { default: null, variants: {} };
       if (m) entry.variants[m[1]] = rel;
       else entry.default = rel;
@@ -360,10 +344,10 @@ export function multiLocalePlugin(options = {}) {
   // Setup file watcher for development with incremental rebuilds
   function setupWatcher() {
     const watchPaths = [
-      // Nunjucks templates
-      `${pagesDir}/**/*.njk`,
-      `${layoutsDir}/**/*.njk`,
-      `${partialsDir}/**/*.njk`,
+      // Eta templates
+      `${pagesDir}/**/*.eta`,
+      `${layoutsDir}/**/*.eta`,
+      `${partialsDir}/**/*.eta`,
       // Data files
       `${dataDir}/**/*.json`,
       // CSS files
@@ -386,7 +370,7 @@ export function multiLocalePlugin(options = {}) {
 
       // Determine file type and appropriate action
       const ext = extname(path).toLowerCase();
-      const isTemplate = ext === ".njk";
+      const isTemplate = ext === ".eta";
       const isData = ext === ".json" && path.startsWith(dataDir);
       const isAsset =
         ext === ".css" ||
@@ -407,13 +391,13 @@ export function multiLocalePlugin(options = {}) {
       // For templates and data files, handle page rebuilding
       if (isTemplate || isData) {
         // Discover pages with co-located variants for incremental rebuild
-        const allFiles = glob.sync(`${pagesDir}/**/*.njk`);
+        const allFiles = glob.sync(`${pagesDir}/**/*.eta`);
         const byBase = new Map();
 
         for (const f of allFiles) {
           const rel = f.replace(`${pagesDir}/`, "");
           const m = rel.match(LOCALE_RE);
-          const baseName = m ? rel.replace(LOCALE_RE, ".njk") : rel;
+          const baseName = m ? rel.replace(LOCALE_RE, ".eta") : rel;
           const entry = byBase.get(baseName) || { default: null, variants: {} };
           if (m) entry.variants[m[1]] = rel;
           else entry.default = rel;
@@ -423,7 +407,7 @@ export function multiLocalePlugin(options = {}) {
         // If a page changed: rebuild that base page for all locales
         if (path.startsWith(pagesDir)) {
           const rel = path.replace(`${pagesDir}/`, "");
-          const base = rel.replace(LOCALE_RE, ".njk");
+          const base = rel.replace(LOCALE_RE, ".eta");
           await pageRenderer.rebuildBase(
             base,
             localeData,
