@@ -1,4 +1,4 @@
-# Contributing to Vite SSR Nunjucks i18n Basic
+# Contributing to vite-ssr-i18n-basic
 
 Thank you for your interest in contributing to this project! 🎉
 
@@ -21,8 +21,8 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/vite-ssr-nunjucks-i18n-basic.git
-   cd vite-ssr-nunjucks-i18n-basic
+   git clone https://github.com/YOUR_USERNAME/vite-ssr-i18n-basic.git
+   cd vite-ssr-i18n-basic
    ```
 3. **Install dependencies**:
    ```bash
@@ -140,16 +140,14 @@ export function myFunction() {
 }
 ```
 
-### Template Standards (Nunjucks)
+### Template Standards (Eta)
 
 ```html
 <!-- Good: Clear template structure -->
-{% extends "main.njk" %}
+<% layout('/layouts/main') %>
 
-{% block content %}
-  <h1>{{ t.page.title }}</h1>
-  <p>{{ t.page.description }}</p>
-{% endblock %}
+<h1><%= t('page.title') %></h1>
+<p><%= t('page.description') %></p>
 ```
 
 ### Translation Files
@@ -243,8 +241,8 @@ When reporting issues, please include:
 
 ## 💬 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/guilbep/vite-ssr-nunjucks-i18n-basic/discussions)
+- **Issues**: [GitHub Issues](https://github.com/guilbep/vite-ssr-i18n-basic/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/guilbep/vite-ssr-i18n-basic/discussions)
 
 ## 📝 License
 

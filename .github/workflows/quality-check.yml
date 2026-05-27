@@ -71,8 +71,8 @@ jobs:
           # Hard requirements: plugin entry, templates, README, CHANGELOG, LICENSE.
           npm pack --dry-run --json > /tmp/pack.json
           for f in plugins/multi-locale-plugin.js \
-                   plugins/templates/sitemap.xml.njk \
-                   plugins/templates/404.html.njk \
+                   plugins/templates/sitemap.xml.eta \
+                   plugins/templates/404.html.eta \
                    plugins/utils/locale-utils.js \
                    plugins/utils/asset-processor.js \
                    README.md CHANGELOG.md LICENSE; do

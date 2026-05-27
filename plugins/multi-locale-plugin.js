@@ -1,26 +1,20 @@
 /**
  * Multi-Locale Vite Plugin
  *
- * A comprehensive static site generator with internationalization support.
- * Refactored into modular components for better maintainability:
+ * Static site generator with i18n support. Renders Eta templates into one
+ * HTML file per page per locale, plus per-locale sitemaps, 404s, and
+ * webmanifests.
  *
  * Utils:
- * - locale-utils.js: Core locale utilities and functions
- * - asset-processor.js: Handles CSS, JS, and image assets with cache busting
- * - page-renderer.js: Template rendering and page generation
+ * - locale-utils.js: route/locale helpers, translator, link rewriter
+ * - asset-processor.js: CSS/JS/image pipeline with cache-busting hashes
+ * - page-renderer.js: per-locale page rendering
  *
- * Generators (using Nunjucks templates from plugins/templates/):
- * - sitemap-generator.js: XML sitemap generation
- * - notfound-generator.js: 404 page generation
- * - webmanifest-generator.js: Localized PWA manifests
- * - root-redirect-generator.js: Root index.html with language detection
- *
- * Templates:
- * - sitemap.xml.njk: Sitemap template with hreflang support
- * - sitemap-index.xml.njk: Sitemap index template
- * - 404.html.njk: 404 error page template
- * - manifest.json.njk: PWA manifest template
- * - root-redirect.html.njk: Root redirect page template
+ * Generators (using bundled .eta templates from plugins/templates/):
+ * - sitemap-generator.js: per-locale sitemap.xml + sitemap-index.xml
+ * - notfound-generator.js: per-locale 404.html
+ * - webmanifest-generator.js: per-locale site.webmanifest
+ * - root-redirect-generator.js: root index.html with language detection
  */
 
 import { resolve, join, dirname, basename, extname } from "path";

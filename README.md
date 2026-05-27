@@ -1,16 +1,18 @@
-# vite-ssr-nunjucks-i18n-basic
+# vite-ssr-i18n-basic
 
-[![npm version](https://img.shields.io/npm/v/vite-ssr-nunjucks-i18n-basic.svg)](https://www.npmjs.com/package/vite-ssr-nunjucks-i18n-basic)
+[![npm version](https://img.shields.io/npm/v/vite-ssr-i18n-basic.svg)](https://www.npmjs.com/package/vite-ssr-i18n-basic)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A Vite plugin that turns Nunjucks templates + locale JSON files into a multi-locale static site. Generates one HTML file per page per locale, plus per-locale sitemaps, 404 pages, and webmanifests. Processes CSS/JS/images with cache-busting hashes and optional WebP conversion.
+A Vite plugin that turns [Eta](https://eta.js.org/) templates + locale JSON files into a multi-locale static site. Generates one HTML file per page per locale, plus per-locale sitemaps, 404 pages, and webmanifests. Processes CSS/JS/images with cache-busting hashes and optional WebP conversion.
 
 Designed to be light: the [demo site](./src) ships under 8 KB total transfer per locale.
+
+> **Renamed in 3.0.0**: previously published as `vite-ssr-nunjucks-i18n-basic` (Nunjucks-backed). The 3.x line replaces the templating engine with Eta — see [CHANGELOG](./CHANGELOG.md) for the migration guide.
 
 ## Install
 
 ```bash
-npm install vite-ssr-nunjucks-i18n-basic
+npm install vite-ssr-i18n-basic
 ```
 
 ## Quick start
@@ -19,7 +21,7 @@ npm install vite-ssr-nunjucks-i18n-basic
 
 ```js
 import { defineConfig } from "vite";
-import { createMultiLocalePlugin } from "vite-ssr-nunjucks-i18n-basic";
+import { createMultiLocalePlugin } from "vite-ssr-i18n-basic";
 
 export default defineConfig({
   plugins: [
@@ -52,9 +54,9 @@ Then `npm run build` and the plugin emits `dist/en/`, `dist/fr/`, sitemaps, etc.
 .
 ├── routes.config.json     # route table (see below)
 ├── src/
-│   ├── pages/             # *.njk pages (one per route key)
-│   ├── layouts/           # base templates (extended via `{% extends %}`)
-│   ├── partials/          # includes (`{% include %}`)
+│   ├── pages/             # *.eta pages (one per route key)
+│   ├── layouts/           # base templates (referenced via `<% layout() %>`)
+│   ├── partials/          # includes (`<%~ include() %>`)
 │   ├── data/
 │   │   ├── en.json        # locale data — keys consumed by `t()`
 │   │   ├── fr.json
@@ -83,7 +85,7 @@ All of `src/`, `src/pages`, `src/layouts`, `src/partials`, `src/data` must exist
 }
 ```
 
-- `key` matches the page filename (`src/pages/<key>.njk`).
+- `key` matches the page filename (`src/pages/<key>.eta`).
 - `path` is appended to `basePath[locale]`. Can be a string (same for all locales) or an object per locale.
 - `landing_page` is special — used by the 404 and webmanifest generators to determine the per-locale output directory.
 
@@ -97,41 +99,56 @@ All of `src/`, `src/pages`, `src/layouts`, `src/partials`, `src/data` must exist
 }
 ```
 
-```njk
-{{ t("homepage.title") }}
-{{ t("homepage.greeting", { name: "Pierre" }) }}
+```eta
+<%= t('homepage.title') %>
+<%= t('homepage.greeting', { name: 'Pierre' }) %>
 ```
 
 Missing keys fall back to `defaultLocale`, then to the key string.
 
-## Template globals & filters
+## Template syntax (Eta cheatsheet)
 
-| Global / filter | What it does |
-|---|---|
-| `t(key, params?)` | Translate. Supports nested keys and `{{param}}` interpolation. |
-| `asset(logicalPath)` | Resolve a logical path (e.g. `/assets/styles/main.css`) to its hashed physical path via the manifest. |
-| `inline_asset(logicalPath)` | **New in 2.1.0** — read the processed (minified, hashed) asset's contents and inline them. Great for critical CSS. |
-| `data_uri(logicalPath)` | **New in 2.2.0** — return a `data:` URI (MIME inferred from extension; SVG URL-encoded, others base64). Great for inlining the LCP avatar/logo so it arrives in the first RTT. |
-| `manifest` | The full asset manifest object. |
-| `getLocalizedUrl(path, locale)` | Localized URL for the current page in another locale (hreflang). |
-| `getRouteUrl(key, locale?)` | URL for a route by key. |
-| `isCurrentLocale(locale)` | `true` when rendering for `locale`. |
-| `locale_url`, `eq`, `url`, `absoluteUrl` | Helper filters. |
+The plugin is configured with `useWith: true`, so render-context fields are exposed as bare identifiers (no `it.` prefix). The full Eta reference is at [eta.js.org](https://eta.js.org/), but in practice you'll only need:
+
+| Eta                              | Output                                                         |
+|----------------------------------|----------------------------------------------------------------|
+| `<%= expr %>`                    | HTML-escaped output                                            |
+| `<%~ expr %>`                    | Raw (unescaped) output — for trusted HTML, JSON, inlined CSS   |
+| `<% code %>`                     | Run JS, no output (use for `if`, `for`, etc.)                  |
+| `<% layout('/layouts/main') %>`  | Wrap this template's render in another layout                  |
+| `<%~ body %>`                    | (Inside a layout) inject the child template's output           |
+| `<%~ include('/partials/x') %>`  | Inline a partial                                               |
+
+## Template helpers
+
+All helpers are available as bare identifiers in templates.
+
+| Helper                          | What it does                                                                                                       |
+|---------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| `t(key, params?)`               | Translate. Supports nested keys and `{{param}}` interpolation.                                                     |
+| `asset(logicalPath)`            | Resolve a logical path (e.g. `/assets/styles/main.css`) to its hashed physical path via the manifest.              |
+| `inline_asset(logicalPath)`     | Read the processed (minified, hashed) asset's contents and return them inline. Pair with `<%~` for critical CSS.   |
+| `data_uri(logicalPath)`         | Return a `data:` URI (MIME inferred; SVG URL-encoded, others base64). Pair with `<%~` to inline a small LCP image. |
+| `manifest`                      | The full asset manifest object.                                                                                    |
+| `getLocalizedUrl(path, locale)` | Localized URL for the current page in another locale (hreflang).                                                   |
+| `getRouteUrl(key, locale?)`     | URL for a route by key.                                                                                            |
+| `isCurrentLocale(locale)`       | `true` when rendering for `locale`.                                                                                |
+| `url`, `absoluteUrl`, `eq`, `locale_url` | Small URL helper functions.                                                                               |
 
 Per-render context also includes: `locale`, `locales`, `alternates`, `defaultLocale`, `rtl`, `meta` (from `meta.json`), `navItems`, `themeColor`, `page`, plus everything from the active locale data.
 
 ### Inlining critical CSS (example)
 
-```njk
-<style>{{ inline_asset('/assets/styles/main.css') }}</style>
+```eta
+<style><%~ inline_asset('/assets/styles/main.css') %></style>
 ```
 
 Removes the render-blocking stylesheet request entirely. CSS still lives in `src/assets/css/` as an editable source file — the plugin minifies, hashes, and inlines the processed version at template render time.
 
 ### Inlining a small LCP image (example)
 
-```njk
-<img src="{{ data_uri('/assets/images/avatar.webp') }}" alt="…" width="200" height="200">
+```eta
+<img src="<%~ data_uri('/assets/images/avatar.webp') %>" alt="…" width="200" height="200">
 ```
 
 The LCP image then ships inside the HTML — no extra request, no extra RTT. Good for tiny images (≤ a few KB). Use sparingly — base64 inflates by ~33 % and is mostly incompressible, so it only pays off for assets small enough to keep your HTML well under the [14 KB initial-window rule](https://endtimes.dev/why-your-website-should-be-under-14kb-in-size/).
@@ -162,8 +179,8 @@ All options have sensible defaults:
 ## Co-located page variants
 
 ```
-src/pages/about.njk        # default
-src/pages/about.fr.njk     # used for /fr/
+src/pages/about.eta        # default
+src/pages/about.fr.eta     # used for /fr/
 ```
 
 The locale-specific file wins; otherwise the default is used and the missing locale appears in `alternates` for hreflang.
@@ -174,7 +191,7 @@ The locale-specific file wins; otherwise the default is used and the missing loc
 - **JS**: minified in prod, hashed. Exposed to templates via `<name>Hash` keys in `assetHashes`.
 - **Images** (`png/jpg/jpeg/webp/avif/svg/gif`): in prod, optimized via [sharp](https://sharp.pixelplumbing.com/) (`sharp` is an `optionalDependency` — install if you need image processing) and given a WebP sibling. Cached by content hash for incremental builds.
 
-The mapping logical → physical is exposed as the `manifest` global.
+The mapping logical → physical is exposed as the `manifest` helper.
 
 ## Demo
 
